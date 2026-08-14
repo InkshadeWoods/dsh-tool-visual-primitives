@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Lock files
+package-lock.json
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

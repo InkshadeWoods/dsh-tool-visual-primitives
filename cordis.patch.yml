@@ -1,0 +1,19 @@
+# dsh-tool-visual-primitives bundle patch
+#
+# This file is the `dsh.bundle.patch` layer of the published npm package: when
+# the plugin is installed through the official CLI —
+#
+#   dsh plugin --profile <name> add dsh-tool-visual-primitives@<version>
+#
+# — the command reconciles `dsh.profile.bundles` against installed packages
+# and, seeing this declaration, appends `dsh-tool-visual-primitives` to the
+# bundle stack. The profile boot then merges THIS patch (a single `insert` of
+# the plugin row) exactly like a manual cordis.patch.yml mount line.
+#
+# The `name` value is the package name, resolved from node_modules when
+# installed via CLI. When the plugin is used as a local folder (copied into
+# ~/.dsh/profiles/web/plugins/), keep the manual mount line in the profile's
+# own cordis.patch.yml pointing at ./plugins/dsh-tool-visual-primitives/index.mjs.
+- insert:
+    - id: tool-visual-primitives
+      name: 'dsh-tool-visual-primitives'
