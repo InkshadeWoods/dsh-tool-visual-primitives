@@ -1,32 +1,19 @@
-/**
- * dsh-tool-visual-primitives — model-facing `vision_analyze` tool.
- *
- * Routes an image (local path or URL) to an external vision model and returns
- * its TEXT analysis. Pure-text loop: the conversation model never receives an
- * image block, so a text-only conversation model can still "see" images.
- *
- * Direct port of the standalone `vision.js` behavior:
- *   - OpenAI-compatible chat completions wire (`POST {baseURL}/chat/completions`)
- *   - Visual Primitives mode instruction (box/point evidence), auto-triggered
- *   - detail levels (brief/standard/verbose) and retry (off/on/format-only)
- *   - MiMo adapter: `api-key` header + `max_completion_tokens` when the base URL
- *     contains `xiaomimimo.com`
- *
- * Credentials resolve through `ctx.credentials` (env → `.credentials.yaml` →
- * `.env` layers), never read by hand. Image bytes read through `ctx.fs`
- * (sandbox-aware) or fetched for URLs.
- *
- * IMPORTANT: this module MUST NOT have a default export — the Cordis Loader's
- * `unwrapExports` would collapse the module and drop `inject`.
- */
-import { defineTool } from "@deepseek-ai/dsh-tools";
-import { credentialRef } from "@deepseek-ai/dsh-credentials";
-import z from "@deepseek-ai/schemastery";
+// dsh-tool-visual-primitives — model-facing `vision_analyze` tool.
+//
+// Routes an image (local path or URL) to an external vision model and returns
+// its TEXT analysis. Pure-text loop: the conversation model never receives an
+// image block, so a text-only conversation model can still "see" images.
+//
+// Registered as a raw JSON-Schema tool definition (no dsh package imports:
+// the developer-preview registry accepts these and out-of-tree resolution of
+// @deepseek-ai/dsh-tools is not yet reliable), so this plugin owns its own
+// argument validation inside execute.
+//
+// References:
+//   DeepSeek "Thinking with Visual Primitives" (2026.05)
+//   https://github.com/deepseek-ai/Thinking-with-Visual-Primitives
 
-/** Cordis plugin name used by loader diagnostics. */
 export const name = "tool-visual-primitives";
-
-/** Required services. `credentials` and `fs` are resolved per-call via ctx.get. */
 export const inject = ["tools"];
 
 const DEFAULT_MAX_TOKENS = 65536;
@@ -34,24 +21,24 @@ const VALID_PRIMITIVE_MODES = new Set(["auto", "on", "off"]);
 const VALID_DETAIL_LEVELS = new Set(["brief", "standard", "verbose"]);
 const VALID_RETRY_MODES = new Set(["off", "on", "format-only"]);
 
-export const Config = z.object({
-  /** Credential reference for the vision model API key. */
-  apiKeyEnv: z.string().default("VISION_API_KEY"),
-  /** Credential reference for the OpenAI-compatible base URL. */
-  baseUrlEnv: z.string().default("VISION_BASE_URL"),
-  /** Credential reference for the vision model name. */
-  modelEnv: z.string().default("VISION_MODEL"),
-  /** Vision primitives mode: auto | on | off. */
-  primitives: z.string().default("auto"),
-  /** Primitive detail level: brief | standard | verbose. */
-  detail: z.string().default("standard"),
-  /** Primitive retry: off | on | format-only. */
-  retry: z.string().default("off"),
-  /** Upper bound (bytes) on one local image read. */
-  maxImageBytes: z.number().default(10 * 1024 * 1024),
-  /** Cooperative tool-call budget in ms (attached as ToolDefinition.timeoutMs). */
-  timeoutMs: z.number().default(60000),
-});
+// ── Config (plain object with defaults, no schemastery) ────────────────────
+
+export const DEFAULT_CONFIG = {
+  apiKeyEnv: "VISION_API_KEY",
+  baseUrlEnv: "VISION_BASE_URL",
+  modelEnv: "VISION_MODEL",
+  primitives: "auto",
+  detail: "standard",
+  retry: "off",
+  maxImageBytes: 10 * 1024 * 1024,
+  timeoutMs: 60000,
+};
+
+function normalizeConfig(config) {
+  return { ...DEFAULT_CONFIG, ...(config || {}) };
+}
+
+// ── helpers ────────────────────────────────────────────────────────────────
 
 function normalizeOption(value, fallback, allowedValues) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -59,7 +46,8 @@ function normalizeOption(value, fallback, allowedValues) {
 }
 
 function assertPositiveInteger(field, value) {
-  if (!Number.isInteger(value) || value < 1) throw new Error(`tool-visual-primitives: ${field} must be a positive integer`);
+  if (!Number.isInteger(value) || value < 1)
+    throw new Error(`tool-visual-primitives: ${field} must be a positive integer`);
 }
 
 // ── mode detection (ported from vision.js) ────────────────────────────────
@@ -101,7 +89,7 @@ function buildModeInstruction(mode) {
 任务重点：多主体分析。
 - 按从左到右、从上到下的稳定顺序编号 subject_1、subject_2 等。
 - 每个主体输出位置框、显著视觉特征、可确认身份和置信度。
-- 若身份无法高置信确认，请明确写“不确定”，不要强行猜测。`,
+- 若身份无法高置信确认，请明确写"不确定"，不要强行猜测。`,
     counting: `
 任务重点：数量统计。
 - 明确统计目标。
@@ -171,7 +159,7 @@ function buildDetailInstruction(detail) {
 }
 
 function buildPrimitiveInstruction(mode, detail) {
-  return `你是一个视觉证据提取与图像分析助手。请将论文式“Thinking with Visual Primitives”的思想用于当前图片分析：先建立可引用的视觉证据，再回答问题。
+  return `你是一个视觉证据提取与图像分析助手。请将论文式"Thinking with Visual Primitives"的思想用于当前图片分析：先建立可引用的视觉证据，再回答问题。
 
 通用规则：
 1. 先提取图像中的关键视觉证据，再回答用户问题。
@@ -320,23 +308,34 @@ async function imageFromUrl(url, signal) {
   return { mediaType, dataUrl: `data:image/${mediaType};base64,${Buffer.from(bytes).toString("base64")}` };
 }
 
-async function analyzeImage(ctx, args, exec, cfg) {
-  const credentials = ctx.get("credentials");
-  const resolveCred = async (envName) => {
-    if (credentials !== void 0) {
-      const hit = await credentials.resolve(credentialRef(envName));
-      if (hit !== void 0 && hit.value) return hit.value;
+// ── credential resolution (inline, no dsh-credentials) ───────────────────
+
+async function resolveCredential(ctx, envName) {
+  // Try ctx.credentials first (if available)
+  const credentials = ctx.get?.("credentials");
+  if (credentials?.resolve) {
+    try {
+      const hit = await credentials.resolve({ type: "env", name: envName });
+      if (hit?.value) return hit.value;
+    } catch {
+      // fall through to env
     }
-    return process.env[envName];
-  };
-  const apiKey = await resolveCred(cfg.apiKeyEnv);
-  const baseURL = await resolveCred(cfg.baseUrlEnv);
-  const model = await resolveCred(cfg.modelEnv);
+  }
+  // Fall back to process.env
+  return process.env[envName];
+}
+
+// ── core analysis ────────────────────────────────────────────────────────
+
+async function analyzeImage(ctx, args, exec, cfg) {
+  const apiKey = await resolveCredential(ctx, cfg.apiKeyEnv);
+  const baseURL = await resolveCredential(ctx, cfg.baseUrlEnv);
+  const model = await resolveCredential(ctx, cfg.modelEnv);
   if (!apiKey) throw new Error(`vision credential "${cfg.apiKeyEnv}" is not configured`);
   if (!baseURL) throw new Error(`vision credential "${cfg.baseUrlEnv}" is not configured`);
   if (!model) throw new Error(`vision credential "${cfg.modelEnv}" is not configured`);
 
-  const prompt = (args.prompt || "请详细描述这张图片的内容.").trim();
+  const prompt = (args.prompt || "请详细描述这张图片的内容。").trim();
   const mode = detectVisionMode(prompt);
   const primitives = normalizeOption(cfg.primitives, "auto", VALID_PRIMITIVE_MODES);
   const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
@@ -384,16 +383,17 @@ function parseArgs(args) {
   return { image_path: hasPath ? args.image_path.trim() : void 0, url: hasUrl ? args.url.trim() : void 0, prompt: args.prompt };
 }
 
-/** Register the `vision_analyze` tool. */
+// ── Registration (raw tool schema, no defineTool wrapper) ─────────────────
+
 export function apply(ctx, config) {
-  const cfg = config;
+  const cfg = normalizeConfig(config);
   assertPositiveInteger("maxImageBytes", cfg.maxImageBytes);
   assertPositiveInteger("timeoutMs", cfg.timeoutMs);
   const primitives = normalizeOption(cfg.primitives, "auto", VALID_PRIMITIVE_MODES);
   const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
   const retry = normalizeOption(cfg.retry, "off", VALID_RETRY_MODES);
 
-  ctx.tools.register(defineTool({
+  ctx.tools.register({
     name: "vision_analyze",
     description: "Analyze an image by routing it to an external vision model and returning its text analysis. Works even when the conversation model has no image input: the image goes only to the vision model, and only its text answer comes back. Provide exactly one of image_path (local file) or url. Use when the task needs to inspect a screenshot, diagram, photo, chart, or image, including questions about positions, counts, relationships, text in images, or UI layouts.",
     parameters: {
@@ -416,5 +416,5 @@ export function apply(ctx, config) {
       const text = await analyzeImage(ctx, input, exec, { ...cfg, primitives, detail, retry });
       return { text };
     },
-  }));
+  });
 }
