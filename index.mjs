@@ -425,7 +425,7 @@ async function convertImagesToEvidence(ctx, messages, signal, cfg) {
 
 async function readImageBlock(ctx, block, signal, cfg) {
   try {
-    // 读取 DSH 附件存储的图片字节
+    // Read image bytes from DSH attachment storage
     const stored = await ctx.attachments.readImage(block.attachment, signal);
     if (!stored?.data) {
       throw new Error("attachments.readImage returned no data");
@@ -480,9 +480,9 @@ function registerVisionProvider(ctx, cfg) {
   const providerId = 'visual-primitives';
 
   // bridgeMode:
-  //   "append"  = 原模型 + 带 [vision] 后缀的桥接模型都显示（默认）
-  //   "replace" = 只显示带 [vision] 后缀的桥接模型（原模型不显示）
-  // 两种模式下桥接模型都保留原名 + [vision] 后缀，便于一眼识别哪些开了桥接
+  //   "append"  = show original models + [vision] variants (default)
+  //   "replace" = show only [vision] variants (no originals)
+  // Bridged models keep the original name + [vision] suffix in both modes.
   const mode = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
 
   try {
@@ -528,7 +528,7 @@ export function apply(ctx, config) {
   const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
   const retry = normalizeOption(cfg.retry, "off", VALID_RETRY_MODES);
 
-  // ── 工具注册（保留，作为独立工具可用）──
+  // Tool registration (preserved, available as standalone tool)
   ctx.tools.register({
     name: "vision_analyze",
     description: "Analyze an image by routing it to an external vision model and returning its text analysis. Works even when the conversation model has no image input: the image goes only to the vision model, and only its text answer comes back. Provide exactly one of image_path (local file) or url. Use when the task needs to inspect a screenshot, diagram, photo, chart, or image, including questions about positions, counts, relationships, text in images, or UI layouts.",
@@ -554,7 +554,7 @@ export function apply(ctx, config) {
     },
   });
 
-  // ── Provider 包装（DSH 原生图片支持）──
+  // Provider wrapper (DSH native image support)
   if (cfg.visionProvider !== false && typeof ctx.llm?.registerAdapter === 'function') {
     registerVisionProvider(ctx, cfg);
   }

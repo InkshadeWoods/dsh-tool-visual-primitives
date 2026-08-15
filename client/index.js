@@ -1,7 +1,7 @@
 /**
  * dsh-tool-visual-primitives — settings section client.
  *
- * Registers a "视觉分析" settings page in DSH's native settings surface.
+ * Registers a "Vision Analysis" settings page in DSH's native settings surface.
  * The component manages its own state and persists to localStorage so the
  * backend does not need to participate in UI settings reads/writes.
  */
