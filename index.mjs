@@ -480,7 +480,7 @@ function registerVisionProvider(ctx, cfg) {
 
   try {
     ctx.llm.registerAdapter([providerId], {
-      providerInfo: () => ({ id: providerId, name: 'DeepSeek (visual primitives)' }),
+      providerInfo: () => ({ id: providerId, name: 'Visual Primitives' }),
       providerRetryPolicy: () => undefined,
 
       async listModels(_provider, signal) {
@@ -488,7 +488,7 @@ function registerVisionProvider(ctx, cfg) {
           const models = await ctx.llm.listModels(upstream, signal);
           return models
             .filter(m => !m.inputModalities?.includes('image'))
-            .map(m => ({ ...m, name: `${m.name ?? m.id} (visual primitives)`, inputModalities: ['text', 'image'] }));
+            .map(m => ({ ...m, name: `${m.name ?? m.id} [vision]`, inputModalities: ['text', 'image'] }));
         } catch {
           return [];
         }
@@ -500,7 +500,6 @@ function registerVisionProvider(ctx, cfg) {
       },
 
       stream(options) {
-        const self = this;
         return (async function* () {
           const messages = await convertImagesToEvidence(ctx, options.messages, options.signal, cfg);
           yield* ctx.llm.stream({ ...options, provider: upstream, messages });
