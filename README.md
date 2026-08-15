@@ -4,7 +4,7 @@
 
 核心思路参考 DeepSeek 的 [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)：以归一化坐标和可引用对象，将图像理解转化为后续推理可使用、可检查的证据。
 
-> 当前版本支持从 GitHub 源码本地挂载。npm 包尚未发布；发布后会补充一行安装命令。
+> 当前版本支持从 GitHub 源码本地挂载。npm 发布后可使用下方的一键安装命令。
 
 ## 功能
 
@@ -46,7 +46,29 @@ detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
 
 视觉服务与被增强的文本模型可以来自不同供应商。
 
-## 安装：从 GitHub 源码本地挂载
+## 安装
+
+### npm 一键安装
+
+发布到 npm 后，在 PowerShell 或终端执行：
+
+```powershell
+npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
+```
+
+该命令调用 DSH 官方插件管理器，在 `web` Profile 中执行包安装。安装成功后，DSH 会识别本插件包内的 `dsh.bundle.patch` 声明，自动将插件加入 `dsh.profile.bundles`，并在启动时应用包内的 `cordis.patch.yml`。
+
+该过程可重复执行，不会重复添加 bundle；它不会直接修改 Profile 自身的 `cordis.patch.yml` 或其他插件配置，因此可与 `dsh-better-sidebar` 等插件共存。
+
+如使用的不是 `web` Profile，请将 `--profile` 改为对应的 Profile 名称：
+
+```powershell
+npx @deepseek-ai/dsh plugin --profile <你的 Profile 名称> add dsh-tool-visual-primitives@latest
+```
+
+安装后完整重启 DSH，并在“设置 → 视觉分析”中填写 API Key、Base URL 和视觉模型。
+
+### 从 GitHub 源码本地挂载
 
 这是当前已验证的安装方式。如使用其他目录，请同步调整 `$source`。
 
@@ -58,25 +80,10 @@ Set-Location $source
 pnpm install
 pnpm run build
 
-Set-Location "$env:USERPROFILE\.dsh\profiles\web"
-pnpm add "link:$source"
+npx @deepseek-ai/dsh plugin --profile web add $source
 ```
 
-然后在 `C:\Users\<你的用户名>\.dsh\profiles\web\package.json` 的 `dsh.profile.bundles` 数组中追加一次 `dsh-tool-visual-primitives`。保留全部已有条目，例如：
-
-```json
-{
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-tool-visual-primitives"
-      ]
-    }
-  }
-}
-```
+DSH 官方 CLI 会自动将本地包加入 Profile 依赖，并基于包内的 `dsh.bundle.patch` 声明维护 `dsh.profile.bundles`；无需手动编辑 Profile 的 `package.json` 或 `cordis.patch.yml`。
 
 完整重启 DSH：
 

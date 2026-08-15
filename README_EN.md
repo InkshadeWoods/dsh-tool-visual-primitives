@@ -4,7 +4,7 @@ A [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) plug
 
 The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives): normalized coordinates and referenceable objects turn image understanding into evidence that later reasoning can inspect and use.
 
-> The current release supports local source mounting from GitHub. The npm package has not been published yet; a one-line package installation command will be added after publication.
+> The current release supports local source mounting from GitHub. After npm publication, use the one-command installer below.
 
 ## Highlights
 
@@ -46,7 +46,29 @@ Original text model continues the answer
 
 The vision provider and the enhanced text-model provider may be different.
 
-## Install from a Local GitHub Clone
+## Installation
+
+### One-command npm install
+
+After publication on npm, run this in PowerShell or a terminal:
+
+```powershell
+npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
+```
+
+The command invokes DSH's official plugin manager and installs the package into the `web` Profile. After installation, DSH detects this package's `dsh.bundle.patch` declaration, adds the plugin to `dsh.profile.bundles`, and applies the package's own `cordis.patch.yml` during boot.
+
+It is safe to run repeatedly: it does not duplicate the bundle and does not directly change the Profile's own `cordis.patch.yml` or other plugin settings, so it can coexist with plugins such as `dsh-better-sidebar`.
+
+If you use a Profile other than `web`, replace `--profile` with that Profile name:
+
+```powershell
+npx @deepseek-ai/dsh plugin --profile <your-profile-name> add dsh-tool-visual-primitives@latest
+```
+
+Restart DSH completely after installation, then configure API Key, Base URL, and the vision model under **Settings → Visual Analysis**.
+
+### Install from a Local GitHub Clone
 
 This is the installation path verified for the current release. You may use another source directory if you also update `$source`.
 
@@ -58,25 +80,10 @@ Set-Location $source
 pnpm install
 pnpm run build
 
-Set-Location "$env:USERPROFILE\.dsh\profiles\web"
-pnpm add "link:$source"
+npx @deepseek-ai/dsh plugin --profile web add $source
 ```
 
-Then append the package name once to `dsh.profile.bundles` in `C:\Users\<your-user>\.dsh\profiles\web\package.json`. Keep all existing entries:
-
-```json
-{
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-tool-visual-primitives"
-      ]
-    }
-  }
-}
-```
+The official DSH CLI adds the local package to the Profile dependencies and maintains `dsh.profile.bundles` from the package's `dsh.bundle.patch` declaration. No manual edit of the Profile's `package.json` or `cordis.patch.yml` is needed.
 
 Restart DSH completely:
 

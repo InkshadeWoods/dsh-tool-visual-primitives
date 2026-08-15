@@ -4,6 +4,9 @@ node_modules/
 # Lock files
 package-lock.json
 
+# npm package archives
+*.tgz
+
 # The client entry is loaded directly by DSH. Keep the generated artifact in
 # version control so local-folder installs work without an implicit build step.
 lib/*
