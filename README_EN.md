@@ -1,6 +1,6 @@
 # dsh-tool-visual-primitives
 
-DSH vision analysis plugin powered by Visual Primitives. Routes images to an external vision model and returns text analysis with spatial evidence (bounding boxes, points, refs). Works as both a standalone tool and a provider-level bridge — text-only models gain native image input without losing conversation continuity.
+DSH vision analysis plugin inspired by the visual primitives approach from DeepSeek's "Thinking with Visual Primitives" paper. Routes images to an external vision model and returns text analysis with spatial evidence (bounding boxes, points, refs). Works as both a standalone tool and a provider-level bridge — text-only models gain native image input without losing conversation continuity.
 
 ## Background
 

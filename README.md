@@ -1,6 +1,6 @@
 # dsh-tool-visual-primitives
 
-基于 DeepSeek「Thinking with Visual Primitives」论文的 DSH 视觉分析插件。将图片路由到外部视觉模型并返回带视觉基元的文本分析。支持独立工具和 Provider 桥接双模式——纯文本模型无需原生视觉能力即可"看见"图片，桥接模式下保持对话连贯性。
+参考 DeepSeek 论文《Thinking with Visual Primitives》中的视觉原语思路，为 DSH 打造的视觉分析插件。将图片路由到外部视觉模型并返回带视觉基元的文本分析。支持独立工具和 Provider 桥接双模式——纯文本模型无需原生视觉能力即可"看见"图片，桥接模式下保持对话连贯性。
 
 ## 背景
 
