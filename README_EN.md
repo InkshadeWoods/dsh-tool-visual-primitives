@@ -135,6 +135,10 @@ npm run build
 
 MIT
 
+## Acknowledgments
+
+The provider bridge framework of this plugin draws inspiration from [modlens](https://github.com/liustack/modlens).
+
 ## References
 
 - DeepSeek paper: [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives) (2026.05)

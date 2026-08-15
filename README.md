@@ -135,6 +135,10 @@ npm run build
 
 MIT
 
+## 致谢
+
+本插件的 Provider 桥接框架参考了 [modlens](https://github.com/liustack/modlens) 的设计思路。
+
 ## 参考
 
 - DeepSeek 论文：[Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives) (2026.05)
