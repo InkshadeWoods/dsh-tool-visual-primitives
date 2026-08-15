@@ -100,6 +100,7 @@ window.__ModuleLoader__.load({
     function VisionSettings() {
       const [state, setState] = useState(loadState);
       const [status, setStatus] = useState({ kind: "idle", text: "" });
+      const [testing, setTesting] = useState(false);
 
       // Persist on every change
       useEffect(() => {
@@ -110,8 +111,13 @@ window.__ModuleLoader__.load({
         setState((prev) => ({ ...prev, [key]: value }));
       };
 
-      const onTest = useCallback(() => {
-        testConnection(state, setStatus);
+      const onTest = useCallback(async () => {
+        setTesting(true);
+        try {
+          await testConnection(state, setStatus);
+        } finally {
+          setTesting(false);
+        }
       }, [state]);
 
       return /* @__PURE__ */ reactJsxRuntime.jsxs(
@@ -145,16 +151,17 @@ window.__ModuleLoader__.load({
                 }),
                 /* @__PURE__ */ reactJsxRuntime.jsx("button", {
                   onClick: onTest,
+                  disabled: testing,
                   style: {
                     padding: "6px 14px",
                     borderRadius: 8,
                     border: "1px solid var(--dsw-alias-border-l2, #444)",
-                    background: "var(--dsw-alias-bg-layer-2, #2a2a2a)",
-                    color: "var(--dsw-alias-label-primary, #e0e0e0)",
-                    cursor: "pointer",
+                    background: testing ? "var(--dsw-alias-bg-layer-3, #333)" : "var(--dsw-alias-bg-layer-2, #2a2a2a)",
+                    color: testing ? "var(--dsw-alias-label-tertiary, #888)" : "var(--dsw-alias-label-primary, #e0e0e0)",
+                    cursor: testing ? "not-allowed" : "pointer",
                     fontSize: 13,
                   },
-                  children: "测试连接",
+                  children: testing ? "测试中..." : "测试连接",
                 }),
               ],
             }),

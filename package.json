@@ -37,6 +37,7 @@
     "dsh.plugin.json",
     "scripts/build.mjs",
     "README.md",
+    "README_EN.md",
     "LICENSE"
   ],
   "scripts": {

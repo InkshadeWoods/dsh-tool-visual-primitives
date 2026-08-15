@@ -408,7 +408,7 @@ async function convertBlocks(blocks, convertOne) {
   return out;
 }
 
-async function convertImagesToEvidence(ctx, messages, signal, cfg) {
+async function convertImagesToEvidence(ctx, messages, signal, cfg, cache) {
   const out = [];
   for (const message of messages) {
     if (!contentHasImage(message.content)) {
@@ -416,15 +416,19 @@ async function convertImagesToEvidence(ctx, messages, signal, cfg) {
       continue;
     }
     const content = await convertBlocks(message.content, (block) =>
-      readImageBlock(ctx, block, signal, cfg)
+      readImageBlock(ctx, block, signal, cfg, cache)
     );
     out.push({ ...message, content });
   }
   return out;
 }
 
-async function readImageBlock(ctx, block, signal, cfg) {
+async function readImageBlock(ctx, block, signal, cfg, cache) {
   try {
+    if (!block?.attachment) {
+      return { type: "text", text: "[Image analysis failed: no attachment reference]" };
+    }
+
     // Read image bytes from DSH attachment storage
     const stored = await ctx.attachments.readImage(block.attachment, signal);
     if (!stored?.data) {
@@ -434,6 +438,12 @@ async function readImageBlock(ctx, block, signal, cfg) {
     const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType;
     const ext = MEDIA_EXT[mediaType] || "png";
     const dataUrl = `data:image/${ext};base64,${Buffer.from(stored.data).toString("base64")}`;
+
+    // Check cache for this attachment
+    const cacheKey = block.attachment.ref || JSON.stringify(block.attachment);
+    if (cache?.has(cacheKey)) {
+      return { type: "text", text: cache.get(cacheKey) };
+    }
 
     const prompt = "Describe this image in detail.";
     const mode = detectVisionMode(prompt);
@@ -448,7 +458,7 @@ async function readImageBlock(ctx, block, signal, cfg) {
     const headers = buildHeaders(apiKey, mimo);
 
     const enhancedPrompt = usePrimitives
-      ? `${buildPrimitiveInstruction(mode, detail)}\n\n用户问题：\n${prompt}`
+      ? `${buildPrimitiveInstruction(mode, detail)}\n\nUser question:\n${prompt}`
       : prompt;
 
     const messages = [{
@@ -466,7 +476,16 @@ async function readImageBlock(ctx, block, signal, cfg) {
       signal,
     );
 
-    return { type: "text", text: `[Image analyzed by visual primitives]\n${result}` };
+    const evidence = `[Image analyzed by visual primitives]\n${result}`;
+    // Cache the evidence for this attachment (LRU-style cap)
+    if (cache) {
+      cache.set(cacheKey, evidence);
+      if (cache.size > 64) {
+        cache.delete(cache.keys().next().value);
+      }
+    }
+
+    return { type: "text", text: evidence };
   } catch (error) {
     return {
       type: "text",
@@ -483,10 +502,13 @@ function registerVisionProvider(ctx, cfg) {
   //   "append"  = show original models + [vision] variants (default)
   //   "replace" = show only [vision] variants (no originals)
   // Bridged models keep the original name + [vision] suffix in both modes.
-  const mode = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
+  const bridgeDisplay = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
+
+  // Evidence cache for this provider (persists across requests)
+  const evidenceCache = new Map();
 
   try {
-    ctx.llm.registerAdapter([providerId], {
+    const disposer = ctx.llm.registerAdapter([providerId], {
       providerInfo: () => ({ id: providerId, name: 'Visual Primitives' }),
       providerRetryPolicy: () => undefined,
 
@@ -508,13 +530,17 @@ function registerVisionProvider(ctx, cfg) {
 
       stream(options) {
         return (async function* () {
-          const messages = await convertImagesToEvidence(ctx, options.messages, options.signal, cfg);
+          const messages = await convertImagesToEvidence(ctx, options.messages, options.signal, cfg, evidenceCache);
           yield* ctx.llm.stream({ ...options, provider: upstream, messages });
         })();
       },
     });
+
+    // Return disposer for plugin cleanup
+    return disposer;
   } catch (error) {
     console.error(`[tool-visual-primitives] vision provider registration skipped: ${error}`);
+    return null;
   }
 }
 

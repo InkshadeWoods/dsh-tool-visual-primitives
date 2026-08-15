@@ -2,7 +2,7 @@
   "id": "dsh-external/dsh-tool-visual-primitives",
   "version": "1.0.0",
   "main": "./index.mjs",
-  "description": "DSH 视觉原语工具：参考 DeepSeek《Thinking with Visual Primitives》论文，将图片路由到外部视觉模型并返回带视觉基元的文本分析。纯文本循环，对话模型无需原生视觉能力即可“看见”图片。",
+  "description": "DSH vision analysis plugin inspired by the visual primitives approach from DeepSeek's \"Thinking with Visual Primitives\" paper. Routes images to an external vision model and returns text analysis with spatial evidence.",
   "engines": {
     "dsh": ">=0.0.1"
   },
