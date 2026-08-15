@@ -1,6 +1,6 @@
 # dsh-tool-visual-primitives
 
-DSH vision analysis plugin inspired by the visual primitives approach from DeepSeek's "Thinking with Visual Primitives" paper. Routes images to an external vision model and returns text analysis with spatial evidence (bounding boxes, points, refs). Works as both a standalone tool and a provider-level bridge — text-only models gain native image input without losing conversation continuity.
+DSH vision analysis plugin inspired by DeepSeek's "Thinking with Visual Primitives" paper. Images from either a chat attachment or `vision_analyze` enter the same visual-primitives core: it identifies the visual task from the question, calls an external vision model, and returns pure-text evidence to the text model.
 
 ## Background
 
@@ -36,27 +36,39 @@ Auto-detected from user prompt keywords:
 | **UI Analysis** | "screenshot", "UI", "button" | UI element annotation |
 | **Document Visual** | "table", "chart", "poster" | Document structure and reading order |
 
-### Detail Levels
+### Detail and Primitives
 
-- **Brief**: Minimum visual primitives necessary
+- **Brief**: Minimum visual evidence necessary
 - **Standard**: Main evidence with relations and uncertainties
 - **Verbose**: Comprehensive objects, relations, uncertainties
 
+Detail is user-configured and defaults to **Standard**. It controls information density only; it does not change the automatically detected visual task.
+
+Primitives are user-configured:
+
+- **Auto** (default): decides whether coordinate-based visual primitives are needed from Mode and Detail
+- **On**: requires visual primitives such as `<ref>`, `<box>`, and `<point>`
+- **Off**: returns usable pure-text visual evidence without requiring primitive tags
+
 ### Retry Mechanism
 
-When output is missing required markers (`<ref>`, `<box>`, `<point>`):
+When Primitives are enabled and output is missing required markers (`<ref>`, `<box>`, `<point>`):
 - **Off**: Return raw result
 - **On**: Re-analyze from image
 - **Format-only**: Keep conclusions, fix formatting
 
-### Dual Operation Mode
+### Two Entrances, One Core
 
 | Mode | How It Works | User Experience |
 |:---|:---|:---|
-| **Tool** (default) | Call `vision_analyze` with `image_path` or `url` | Works with any model |
-| **Provider Bridge** (opt-in) | Wraps text-only models to accept image input natively | Paste images directly — same model handles text and converted evidence |
+| **Explicit analysis** | Call `vision_analyze` with `image_path` or `url` | External images and advanced analysis |
+| **Chat vision** | Wrap a text-only model to receive chat attachments | Paste images directly; the current question enters the same core |
 
-### Bridge Display Modes
+Execution order: `detectVisionMode()` → `shouldUsePrimitives()` → `buildVisionPrompt()`.
+
+### Bridge Display
+
+The bridge currently uses a fixed append display mode in the model selector:
 
 | Mode | Effect |
 |:---|:---|
@@ -64,7 +76,7 @@ When output is missing required markers (`<ref>`, `<box>`, `<point>`):
 
 In both modes, bridged models keep the original name + `[vision]` suffix for clear identification (suffixed = bridge active, unsuffixed = no bridge).
 
-> `replace` mode is reserved for future DSH releases that support hiding other providers.
+> `replace` mode is reserved for a future DSH release that supports hiding other providers.
 
 ## Installation
 
@@ -91,7 +103,7 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
    - **Base URL**: OpenAI-compatible endpoint
    - **Model**: Vision model name
 4. Click **Test Connection** to verify
-5. Adjust analysis parameters and bridge mode
+5. Adjust Detail, Visual Primitives, Retry, and other analysis parameters
 6. Save
 
 ### Credential Resolution Order
@@ -101,7 +113,7 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
 
 ## Usage
 
-### Tool Mode
+### Explicit Analysis
 
 ```json
 {
@@ -117,11 +129,11 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
 }
 ```
 
-### Provider Bridge Mode
+### Chat Vision
 
 1. Select a model with `[vision]` suffix in the model selector
 2. Paste or drop images directly into the conversation
-3. Images are automatically converted to evidence text and fed to the same model
+3. Images are converted into visual-primitives text evidence for the current question and fed to the same model
 
 ## Development
 

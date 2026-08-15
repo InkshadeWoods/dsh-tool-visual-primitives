@@ -2,8 +2,8 @@
  * dsh-tool-visual-primitives — settings section client.
  *
  * Registers a "Vision Analysis" settings page in DSH's native settings surface.
- * The component manages its own state and persists to localStorage so the
- * backend does not need to participate in UI settings reads/writes.
+ * Credentials and analysis settings are synchronized through DSH's credential
+ * service so the backend reads the same effective configuration.
  */
 window.__ModuleLoader__.load({
   id: "dsh-external/dsh-tool-visual-primitives",
@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return { ...FALLBACKS };
         const parsed = JSON.parse(raw);
-        return { ...FALLBACKS, ...parsed };
+        return { ...FALLBACKS, ...parsed, apiKey: "" };
       } catch {
         return { ...FALLBACKS };
       }
@@ -45,26 +45,77 @@ window.__ModuleLoader__.load({
 
     function saveState(state) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, apiKey: "" }));
       } catch {
         // quota exceeded — silently ignore
       }
     }
 
+    /* ── credential API bridge ─────────────────────────────── */
+
+    let credentialApi = null;
+
+    function getCredentialApi(ctx) {
+      try {
+        const connection = ctx?.get?.("connection");
+        return connection?.api?.credentials || null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function syncCredentials(api, state) {
+      if (!api) return;
+      const entries = [
+        ["VISION_API_KEY", state.apiKey],
+        ["VISION_BASE_URL", state.baseUrl],
+        ["VISION_MODEL", state.model],
+        ["VISION_PRIMITIVES", state.primitives],
+        ["VISION_DETAIL", state.detail],
+        ["VISION_RETRY", state.retry],
+        ["VISION_MAX_IMAGE_BYTES", String(state.maxImageBytes)],
+        ["VISION_TIMEOUT_MS", String(state.timeoutMs)],
+      ];
+      for (const [ref, value] of entries) {
+        const trimmed = String(value || "").trim();
+        if (!trimmed) continue;
+        try {
+          await api.credentials.set({ ref, value: trimmed });
+        } catch {
+          // non-fatal: credential store may reject if env shadows the ref
+        }
+      }
+    }
+
     /* ── test-connection helper ─────────────────────────────── */
 
-    async function testConnection(state, setStatus) {
+    async function testConnection(state, setStatus, credentialApi) {
       setStatus({ kind: "loading", text: "正在测试连接…" });
       const start = Date.now();
       try {
+        // Credential values cannot be read back by design; use the current form values.
+        let apiKey = state.apiKey;
+        let baseUrl = state.baseUrl;
+        let model = state.model;
+        if (credentialApi) {
+          try {
+            const described = await credentialApi.credentials.describe({
+              refs: ["VISION_API_KEY", "VISION_BASE_URL", "VISION_MODEL"],
+            });
+            // describe only returns configured/source, not the value.
+          } catch {
+            // fall through
+          }
+        }
+
         const url =
-          state.baseUrl.replace(/\/?$/, "/") + "chat/completions";
+          baseUrl.replace(/\/?$/, "/") + "chat/completions";
         const headers = { "Content-Type": "application/json" };
-        if (state.apiKey) {
-          headers.Authorization = `Bearer ${state.apiKey}`;
+        if (apiKey) {
+          headers.Authorization = `Bearer ${apiKey}`;
         }
         const body = {
-          model: state.model || "test",
+          model: model || "test",
           messages: [{ role: "user", content: "Say OK" }],
           max_tokens: 4,
           stream: false,
@@ -102,9 +153,10 @@ window.__ModuleLoader__.load({
       const [status, setStatus] = useState({ kind: "idle", text: "" });
       const [testing, setTesting] = useState(false);
 
-      // Persist on every change
+      // Persist non-secret UI state and synchronize the effective backend configuration.
       useEffect(() => {
         saveState(state);
+        void syncCredentials(credentialApi, state);
       }, [state]);
 
       const update = (key, value) => {
@@ -114,11 +166,11 @@ window.__ModuleLoader__.load({
       const onTest = useCallback(async () => {
         setTesting(true);
         try {
-          await testConnection(state, setStatus);
+          await testConnection(state, setStatus, credentialApi);
         } finally {
           setTesting(false);
         }
-      }, [state]);
+      }, [state, credentialApi]);
 
       return /* @__PURE__ */ reactJsxRuntime.jsxs(
         "div",
@@ -243,14 +295,14 @@ window.__ModuleLoader__.load({
                   children: "⚙️ 分析参数",
                 }),
                 selectField(
-                  "Primitives Mode",
+                  "Visual Primitives",
                   "primitives",
                   state.primitives,
                   update,
                   ["auto", "on", "off"]
                 ),
                 selectField(
-                  "Detail Level",
+                  "Detail Level (default: standard)",
                   "detail",
                   state.detail,
                   update,
@@ -353,7 +405,7 @@ window.__ModuleLoader__.load({
                 lineHeight: 1.6,
               },
               children:
-                "配置自动保存到本地存储。修改后下次使用 vision_analyze 工具时生效。",
+                "分析设置会同步到 DSH 凭据存储，并在下一次视觉分析请求中生效。API Key 不会保存在浏览器本地存储。",
             }),
           ],
         }
@@ -477,6 +529,7 @@ window.__ModuleLoader__.load({
     /* ── Cordis registration ────────────────────────────────── */
 
     function apply(ctx) {
+      credentialApi = getCredentialApi(ctx);
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register({
           name: "settings.section",

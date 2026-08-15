@@ -32,6 +32,8 @@
   },
   "files": [
     "index.mjs",
+    "adapters",
+    "vision",
     "lib/client.js",
     "cordis.patch.yml",
     "dsh.plugin.json",

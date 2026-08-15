@@ -1,6 +1,6 @@
 # dsh-tool-visual-primitives
 
-参考 DeepSeek 论文《Thinking with Visual Primitives》中的视觉原语思路，为 DSH 打造的视觉分析插件。将图片路由到外部视觉模型并返回带视觉基元的文本分析。支持独立工具和 Provider 桥接双模式——纯文本模型无需原生视觉能力即可"看见"图片，桥接模式下保持对话连贯性。
+参考 DeepSeek 论文《Thinking with Visual Primitives》中的视觉原语思路，为 DSH 打造的视觉分析插件。无论图片来自对话上传还是 `vision_analyze`，都会进入同一视觉原语核心：按问题识别视觉任务、调用外部视觉模型，并把纯文本证据交给文本模型继续推理。
 
 ## 背景
 
@@ -36,29 +36,39 @@
 | **UI Analysis** | "截图" "界面" "按钮" | UI 元素标注，位置和下一步建议 |
 | **Document Visual** | "表格" "图表" "海报" | 文字结构分析，阅读顺序和视觉层级 |
 
-### 三级 Detail 控制
+### Detail 与 Primitives
 
-- **Brief**：只列出回答问题所需的最少视觉基元
+- **Brief**：只列出回答问题所需的最少视觉证据
 - **Standard**：列出主要视觉证据，给出必要的关系和不确定性
 - **Verbose**：尽量完整列出关键对象、关系和不确定性
 
+Detail 由用户配置，默认 **Standard**。它只控制输出的信息密度，不改变自动识别的视觉任务类型。
+
+Primitives 由用户配置：
+
+- **Auto**（默认）：根据 Mode、Detail 自动决定是否要求坐标化视觉原语
+- **On**：强制要求 `<ref>`、`<box>`、`<point>` 等视觉原语
+- **Off**：仅输出可用的纯文本视觉证据，不要求视觉原语标签
+
 ### Retry 机制
 
-当模型输出缺少必要的 `<ref>`、`<box>` 或 `<point>` 标记时：
+当 Primitives 已启用且模型输出缺少必要的 `<ref>`、`<box>` 或 `<point>` 标记时：
 - **Off**：不重试，返回原始结果
 - **On**：重新基于图片分析，严格按格式输出
 - **Format-only**：保持上一轮结论，只补齐和整理视觉基元格式
 
-### 双运行模式
+### 两个入口，一个核心
 
 | 模式 | 工作方式 | 用户体验 |
 |:---|:---|:---|
-| **工具模式**（默认） | 调用 `vision_analyze` 工具，参数传 `image_path` 或 `url` | 任何模型都能用 |
-| **Provider 桥接**（可选） | 包装纯文本模型，原生支持图片输入 | 直接粘贴图片，同一模型处理文本和转换后的证据 |
+| **显式分析入口** | 调用 `vision_analyze`，参数传 `image_path` 或 `url` | 适合外部图片与高级分析 |
+| **对话视觉入口** | 包装纯文本模型，接收对话附件 | 直接粘贴图片；当前问题会进入同一视觉原语核心 |
 
-### 桥接显示模式
+执行顺序：`detectVisionMode()` → `shouldUsePrimitives()` → `buildVisionPrompt()`。
 
-桥接模式下，可控制在模型选择器中的显示方式：
+### 桥接显示方式
+
+当前桥接在模型选择器中使用固定的 append 显示方式：
 
 | 模式 | 效果 |
 |:---|:---|
@@ -66,7 +76,7 @@
 
 两种模式下桥接模型都保留原名 + `[vision]` 后缀，便于一眼识别哪些模型开启了桥接（带后缀的 = 开了桥接，不带的 = 没开）。
 
-> `replace` 模式已预留给未来 DSH 版本（支持隐藏其他 provider 时使用）。
+> `replace` 模式预留给未来 DSH 版本（支持隐藏其他 provider 时使用）。
 
 ## 安装
 
@@ -93,7 +103,7 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
    - **Base URL**：OpenAI 兼容端点
    - **Model**：视觉模型名称
 4. 点击 **测试连接** 验证配置
-5. 调整分析参数和桥接模式
+5. 调整 Detail、Visual Primitives、Retry 等分析参数
 6. 保存
 
 ### 凭证解析顺序
@@ -103,7 +113,7 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
 
 ## 使用
 
-### 工具模式
+### 显式分析入口
 
 ```json
 {
@@ -119,11 +129,11 @@ git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
 }
 ```
 
-### Provider 桥接模式
+### 对话视觉入口
 
 1. 在模型选择器中选择带 `[vision]` 后缀的模型
 2. 直接在对话中粘贴或拖入图片
-3. 图片自动转换为证据文本，送进同一模型继续推理
+3. 图片将结合当前问题转换为视觉原语纯文本证据，送进同一模型继续推理
 
 ## 开发
 
