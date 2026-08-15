@@ -1,0 +1,84 @@
+name: Bug 报告
+description: 报告一个可稳定复现的问题，帮助我们改进插件。
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供可复现的最小示例。
+
+        **安全提示：请勿粘贴 API Key、访问令牌、完整本地路径或其他敏感信息。**
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      description: 例如 `npx @deepseek-ai/dsh --version` 的输出。
+      placeholder: 例如 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本或提交号
+      description: 请填写 Release 版本或正在使用的 Git 提交短哈希。
+      placeholder: 例如 v1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: entry-point
+    attributes:
+      label: 发生问题的入口
+      options:
+        - 对话视觉模型（[vision]）
+        - vision_analyze 工具
+        - 插件设置页
+        - 安装或启动过程
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请按顺序列出从启动 DSH 到问题出现的操作。
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为与错误信息
+      description: 可粘贴脱敏后的报错信息。
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: 脱敏后的相关配置（可选）
+      description: 可包含 Base URL、视觉模型、Detail、Primitives、Retry 等；不要包含 API Key。
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志（可选）
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏（可选）
+      description: 请确认截图中不含 API Key、个人信息或其他敏感内容。
+  - type: checkboxes
+    id: security
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已移除 API Key、令牌和其他敏感信息。
+          required: true
