@@ -4,10 +4,9 @@
 // its TEXT analysis. Pure-text loop: the conversation model never receives an
 // image block, so a text-only conversation model can still "see" images.
 //
-// Registered as a raw JSON-Schema tool definition (no dsh package imports:
-// the developer-preview registry accepts these and out-of-tree resolution of
-// @deepseek-ai/dsh-tools is not yet reliable), so this plugin owns its own
-// argument validation inside execute.
+// Registered as a raw JSON-Schema tool definition (no dsh package imports),
+// so this plugin owns its own argument validation inside execute and stays
+// free of any @deepseek-ai runtime dependency.
 //
 // References:
 //   DeepSeek "Thinking with Visual Primitives" (2026.05)
@@ -32,6 +31,8 @@ export const DEFAULT_CONFIG = {
   retry: "off",
   maxImageBytes: 10 * 1024 * 1024,
   timeoutMs: 60000,
+  upstream: "",
+  visionProvider: true,
 };
 
 function normalizeConfig(config) {
@@ -383,7 +384,135 @@ function parseArgs(args) {
   return { image_path: hasPath ? args.image_path.trim() : void 0, url: hasUrl ? args.url.trim() : void 0, prompt: args.prompt };
 }
 
-// ── Registration (raw tool schema, no defineTool wrapper) ─────────────────
+// ── Provider wrapper (DSH native image support) ──────────────────────────
+
+function contentHasImage(blocks) {
+  return (
+    Array.isArray(blocks) &&
+    blocks.some((b) => b?.type === 'image' || (b?.type === 'tool-result' && contentHasImage(b.content)))
+  );
+}
+
+async function convertBlocks(blocks, convertOne) {
+  const out = [];
+  for (const block of blocks) {
+    if (block?.type === 'image') {
+      out.push(await convertOne(block));
+    } else if (block?.type === 'tool-result' && contentHasImage(block.content)) {
+      out.push({ ...block, content: await convertBlocks(block.content, convertOne) });
+    } else {
+      out.push(block);
+    }
+  }
+  return out;
+}
+
+async function convertImagesToEvidence(ctx, messages, signal, cfg) {
+  const out = [];
+  for (const message of messages) {
+    if (!contentHasImage(message.content)) {
+      out.push(message);
+      continue;
+    }
+    const content = await convertBlocks(message.content, (block) =>
+      readImageBlock(ctx, block, signal, cfg)
+    );
+    out.push({ ...message, content });
+  }
+  return out;
+}
+
+async function readImageBlock(ctx, block, signal, cfg) {
+  try {
+    // 读取 DSH 附件存储的图片字节
+    const stored = await ctx.attachments.readImage(block.attachment, signal);
+    if (!stored?.data) {
+      throw new Error("attachments.readImage returned no data");
+    }
+
+    const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType;
+    const ext = MEDIA_EXT[mediaType] || "png";
+    const dataUrl = `data:image/${ext};base64,${Buffer.from(stored.data).toString("base64")}`;
+
+    const prompt = "Describe this image in detail.";
+    const mode = detectVisionMode(prompt);
+    const primitives = normalizeOption(cfg.primitives, "auto", VALID_PRIMITIVE_MODES);
+    const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
+    const usePrimitives = shouldUsePrimitives(mode, primitives, detail);
+
+    const apiKey = await resolveCredential(ctx, cfg.apiKeyEnv);
+    const baseURL = await resolveCredential(ctx, cfg.baseUrlEnv);
+    const model = await resolveCredential(ctx, cfg.modelEnv);
+    const mimo = isMimo(baseURL);
+    const headers = buildHeaders(apiKey, mimo);
+
+    const enhancedPrompt = usePrimitives
+      ? `${buildPrimitiveInstruction(mode, detail)}\n\n用户问题：\n${prompt}`
+      : prompt;
+
+    const messages = [{
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: dataUrl } },
+        { type: "text", text: enhancedPrompt },
+      ],
+    }];
+
+    const result = await request(
+      baseURL,
+      buildPayload(model, messages, DEFAULT_MAX_TOKENS, mimo),
+      headers,
+      signal,
+    );
+
+    return { type: "text", text: `[Image analyzed by visual primitives]\n${result}` };
+  } catch (error) {
+    return {
+      type: "text",
+      text: `[Image analysis failed: ${error instanceof Error ? error.message : String(error)}]`,
+    };
+  }
+}
+
+function registerVisionProvider(ctx, cfg) {
+  const upstream = cfg.upstream || 'deepseek-official';
+  const providerId = 'visual-primitives';
+
+  try {
+    ctx.llm.registerAdapter([providerId], {
+      providerInfo: () => ({ id: providerId, name: 'DeepSeek (visual primitives)' }),
+      providerRetryPolicy: () => undefined,
+
+      async listModels(_provider, signal) {
+        try {
+          const models = await ctx.llm.listModels(upstream, signal);
+          return models
+            .filter(m => !m.inputModalities?.includes('image'))
+            .map(m => ({ ...m, name: `${m.name ?? m.id} (visual primitives)`, inputModalities: ['text', 'image'] }));
+        } catch {
+          return [];
+        }
+      },
+
+      async resolveModel(_provider, model, signal) {
+        const info = await ctx.llm.resolveModelInfo(upstream, signal);
+        return { ...info, inputModalities: ['text', 'image'] };
+      },
+
+      stream(options) {
+        const self = this;
+        return (async function* () {
+          const messages = await convertImagesToEvidence(ctx, options.messages, options.signal, cfg);
+          yield* ctx.llm.stream({ ...options, provider: upstream, messages });
+        })();
+      },
+    });
+  } catch (error) {
+    console.error(`[tool-visual-primitives] vision provider registration skipped: ${error}`);
+  }
+}
+
+// ── Registration (raw tool schema, no dsh package imports) ─────────────────
 
 export function apply(ctx, config) {
   const cfg = normalizeConfig(config);
@@ -393,6 +522,7 @@ export function apply(ctx, config) {
   const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
   const retry = normalizeOption(cfg.retry, "off", VALID_RETRY_MODES);
 
+  // ── 工具注册（保留，作为独立工具可用）──
   ctx.tools.register({
     name: "vision_analyze",
     description: "Analyze an image by routing it to an external vision model and returning its text analysis. Works even when the conversation model has no image input: the image goes only to the vision model, and only its text answer comes back. Provide exactly one of image_path (local file) or url. Use when the task needs to inspect a screenshot, diagram, photo, chart, or image, including questions about positions, counts, relationships, text in images, or UI layouts.",
@@ -417,4 +547,9 @@ export function apply(ctx, config) {
       return { text };
     },
   });
+
+  // ── Provider 包装（DSH 原生图片支持）──
+  if (cfg.visionProvider !== false && typeof ctx.llm?.registerAdapter === 'function') {
+    registerVisionProvider(ctx, cfg);
+  }
 }
