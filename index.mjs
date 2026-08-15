@@ -480,10 +480,10 @@ function registerVisionProvider(ctx, cfg) {
   const providerId = 'visual-primitives';
 
   // bridgeMode:
-  //   "append"  = 原模型 + [vision] 都显示（默认，安全，可回退）
-  //   "replace" = 只显示 [vision] 版（简洁，无后缀，用原名称）
+  //   "append"  = 原模型 + 带 [vision] 后缀的桥接模型都显示（默认）
+  //   "replace" = 只显示带 [vision] 后缀的桥接模型（原模型不显示）
+  // 两种模式下桥接模型都保留原名 + [vision] 后缀，便于一眼识别哪些开了桥接
   const mode = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
-  const suffix = mode === 'replace' ? '' : ' [vision]';
 
   try {
     ctx.llm.registerAdapter([providerId], {
@@ -495,7 +495,7 @@ function registerVisionProvider(ctx, cfg) {
           const models = await ctx.llm.listModels(upstream, signal);
           return models
             .filter(m => !m.inputModalities?.includes('image'))
-            .map(m => ({ ...m, name: `${m.name ?? m.id}${suffix}`, inputModalities: ['text', 'image'] }));
+            .map(m => ({ ...m, name: `${m.name ?? m.id} [vision]`, inputModalities: ['text', 'image'] }));
         } catch {
           return [];
         }
