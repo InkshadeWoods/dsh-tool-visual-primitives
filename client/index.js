@@ -27,6 +27,7 @@ window.__ModuleLoader__.load({
       retry: "off",
       maxImageBytes: 10 * 1024 * 1024,
       timeoutMs: 60000,
+      bridgeMode: "append",
     };
 
     /* ── persistence (localStorage) ─────────────────────────── */
@@ -276,6 +277,38 @@ window.__ModuleLoader__.load({
               ],
             }),
 
+            /* Bridge mode card */
+            /* @__PURE__ */ reactJsxRuntime.jsxs("div", {
+              style: {
+                background: "var(--dsw-alias-bg-layer-3, #1e1e1e)",
+                border: "1px solid var(--dsw-alias-border-l2, #333)",
+                borderRadius: 12,
+                padding: "16px 18px",
+                marginBottom: 16,
+              },
+              children: [
+                /* @__PURE__ */ reactJsxRuntime.jsx("div", {
+                  style: {
+                    fontSize: 13,
+                    fontWeight: 600,
+                    marginBottom: 12,
+                    color: "var(--dsw-alias-label-primary, #e0e0e0)",
+                  },
+                  children: "🪟 桥接模式",
+                }),
+                selectField(
+                  "模型显示方式",
+                  "bridgeMode",
+                  state.bridgeMode,
+                  update,
+                  [
+                    { value: "append", label: "显示原模型 + [vision]" },
+                    { value: "replace", label: "只显示 [vision] 版" },
+                  ]
+                ),
+              ],
+            }),
+
             /* footer hint */
             /* @__PURE__ */ reactJsxRuntime.jsx("p", {
               style: {
@@ -355,13 +388,15 @@ window.__ModuleLoader__.load({
               outline: "none",
               boxSizing: "border-box",
             },
-            children: options.map((opt) =>
-              /* @__PURE__ */ reactJsxRuntime.jsx(
+            children: options.map((opt) => {
+              const v = typeof opt === "string" ? opt : opt.value;
+              const labelText = typeof opt === "string" ? opt : opt.label;
+              return /* @__PURE__ */ reactJsxRuntime.jsx(
                 "option",
-                { value: opt, children: opt },
-                opt
-              )
-            ),
+                { value: v, children: labelText },
+                v
+              );
+            }),
           }),
         ],
       });

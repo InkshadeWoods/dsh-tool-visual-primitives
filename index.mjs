@@ -33,6 +33,7 @@ export const DEFAULT_CONFIG = {
   timeoutMs: 60000,
   upstream: "",
   visionProvider: true,
+  bridgeMode: "append",
 };
 
 function normalizeConfig(config) {
@@ -478,6 +479,12 @@ function registerVisionProvider(ctx, cfg) {
   const upstream = cfg.upstream || 'deepseek-official';
   const providerId = 'visual-primitives';
 
+  // bridgeMode:
+  //   "append"  = 原模型 + [vision] 都显示（默认，安全，可回退）
+  //   "replace" = 只显示 [vision] 版（简洁，无后缀，用原名称）
+  const mode = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
+  const suffix = mode === 'replace' ? '' : ' [vision]';
+
   try {
     ctx.llm.registerAdapter([providerId], {
       providerInfo: () => ({ id: providerId, name: 'Visual Primitives' }),
@@ -488,7 +495,7 @@ function registerVisionProvider(ctx, cfg) {
           const models = await ctx.llm.listModels(upstream, signal);
           return models
             .filter(m => !m.inputModalities?.includes('image'))
-            .map(m => ({ ...m, name: `${m.name ?? m.id} [vision]`, inputModalities: ['text', 'image'] }));
+            .map(m => ({ ...m, name: `${m.name ?? m.id}${suffix}`, inputModalities: ['text', 'image'] }));
         } catch {
           return [];
         }
