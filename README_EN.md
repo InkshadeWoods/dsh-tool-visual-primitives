@@ -228,7 +228,10 @@ pnpm install
 pnpm run build
 ```
 
-`pnpm run build` generates the client bundle at `lib/client.js`. The server entry is `index.mjs`: restart DSH after changing it. Force-refresh the browser after changing the client UI.
+`pnpm run build` generates the client bundle at `lib/client.js`.
+
+- The server entry is `index.mjs`; restart DSH after changing it.
+- After changing the client UI, rebuild the package and force-refresh the browser page.
 
 ## License
 

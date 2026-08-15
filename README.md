@@ -228,7 +228,10 @@ pnpm install
 pnpm run build
 ```
 
-`pnpm run build` 生成浏览器端包 `lib/client.js`。服务端入口为 `index.mjs`，修改后需重启 DSH；修改客户端界面后还需强制刷新浏览器。
+`pnpm run build` 会生成客户端包 `lib/client.js`。
+
+- 服务端入口为 `index.mjs`；修改后需要重启 DSH。
+- 修改客户端界面后，需要重新执行构建，并在浏览器中强制刷新页面。
 
 ## 许可证
 
