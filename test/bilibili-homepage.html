@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>哔哩哔哩 (゜-゜)つロ 干杯~</title>
+    <style>
+        /* ========== Reset & Base ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #f4f4f4;
+            color: #222;
+            min-width: 1200px;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+        ul { list-style: none; }
+
+        /* ========== Top Navigation Bar ========== */
+        .top-nav {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #e3e3e3;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 18px;
+        }
+
+        /* Logo */
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .nav-logo svg {
+            width: 46px;
+            height: 46px;
+        }
+
+        /* Menu Items */
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .nav-menu a {
+            padding: 6px 14px;
+            font-size: 14px;
+            color: #555;
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
+        }
+        .nav-menu a:hover {
+            background: #f0f0f0;
+            color: #00a1d6;
+        }
+        .nav-menu a.active {
+            color: #fff;
+            background: #00a1d6;
+        }
+
+        /* Search Bar */
+        .nav-search {
+            flex: 1;
+            max-width: 460px;
+            display: flex;
+            align-items: center;
+            background: #f4f4f4;
+            border-radius: 20px;
+            padding: 0 16px;
+            height: 36px;
+            border: 1px solid transparent;
+            transition: border 0.2s;
+        }
+        .nav-search:focus-within {
+            border-color: #00a1d6;
+            background: #fff;
+        }
+        .nav-search input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 13px;
+            height: 100%;
+        }
+        .nav-search .search-icon {
+            font-size: 18px;
+            color: #999;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .nav-search .search-icon:hover {
+            color: #00a1d6;
+        }
+
+        /* User Area */
+        .nav-user {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+        .nav-user .icon-btn {
+            font-size: 20px;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .nav-user .icon-btn:hover {
+            color: #00a1d6;
+        }
+        .nav-user .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ddd;
+            overflow: hidden;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .nav-user .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .nav-user .upload-btn {
+            background: #fb7299;
+            color: #fff;
+            border: none;
+            border-radius: 20px;
+            padding: 6px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .nav-user .upload-btn:hover {
+            background: #f55a7a;
+        }
+
+        /* ========== Hero Banner ========== */
+        .hero-banner {
+            position: relative;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 1400px;
+            height: 280px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hero-banner canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 1300px;
+            padding: 0 40px;
+        }
+        .hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .hero-left .bilibili-logo {
+            width: 120px;
+            height: auto;
+        }
+        .hero-left .hero-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .hero-left .hero-desc {
+            font-size: 15px;
+            color: rgba(255,255,255,0.8);
+            max-width: 400px;
+            line-height: 1.6;
+        }
+        .hero-left .hero-btn {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 10px 28px;
+            background: #fb7299;
+            color: #fff;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .hero-left .hero-btn:hover {
+            background: #f55a7a;
+            transform: scale(1.04);
+        }
+        .hero-right {
+            position: relative;
+            width: 360px;
+            height: 240px;
+        }
+        .hero-right img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 0 30px rgba(0,161,214,0.4));
+        }
+
+        /* ========== Main Layout ========== */
+        .main-wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 24px;
+            display: flex;
+            gap: 24px;
+        }
+
+        /* ========== Left Column ========== */
+        .left-column {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* ========== Category Navigation ========== */
+        .category-nav {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 0;
+            border-bottom: 1px solid #e8e8e8;
+            flex-wrap: wrap;
+        }
+        .category-nav .cat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 14px;
+            font-size: 14px;
+            color: #555;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .category-nav .cat-item:hover {
+            background: #f0f0f0;
+            color: #00a1d6;
+        }
+        .category-nav .cat-item.active {
+            color: #fff;
+            background: #00a1d6;
+        }
+        .category-nav .cat-item .icon {
+            font-size: 16px;
+        }
+        .category-nav .cat-item .icon.orange { color: #f5a623; }
+        .category-nav .cat-item .icon.red { color: #ff6b6b; }
+        .category-nav .cat-item.active .icon {
+            color: #fff;
+        }
+
+        .category-nav .tag-group {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-left: 8px;
+        }
+        .category-nav .tag-group .tag {
+            padding: 4px 12px;
+            font-size: 13px;
+            color: #666;
+            background: #f4f4f4;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .category-nav .tag-group .tag:hover {
+            background: #e6f4ff;
+            color: #00a1d6;
+        }
+        .category-nav .tag-group .tag.hot {
+            color: #fb7299;
+        }
+
+        /* ========== Featured Carousel (Left) ========== */
+        .featured-section {
+            display: flex;
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .featured-carousel {
+            flex: 1;
+            min-width: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16 / 9;
+            background: #1a1a2e;
+        }
+        .featured-carousel .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            display: flex;
+            align-items: flex-end;
+            padding: 24px;
+        }
+        .featured-carousel .slide.active {
+            opacity: 1;
+        }
+        .featured-carousel .slide:nth-child(1) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .featured-carousel .slide:nth-child(2) {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .featured-carousel .slide:nth-child(3) {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .featured-carousel .slide .slide-info {
+            color: #fff;
+        }
+        .featured-carousel .slide .slide-info h3 {
+            font-size: 20px;
+            margin-bottom: 6px;
+        }
+        .featured-carousel .slide .slide-info p {
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        .featured-carousel .dots {
+            position: absolute;
+            bottom: 12px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 3;
+        }
+        .featured-carousel .dots .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: background 0.3s, transform 0.3s;
+        }
+        .featured-carousel .dots .dot.active {
+            background: #fff;
+            transform: scale(1.3);
+        }
+
+        /* Side cards next to carousel */
+        .featured-side {
+            width: 240px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .featured-side .side-card {
+            flex: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .featured-side .side-card:hover {
+            transform: translateY(-2px);
+        }
+        .featured-side .side-card.card1 {
+            background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+        }
+        .featured-side .side-card.card2 {
+            background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%);
+        }
+        .featured-side .side-card .label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            margin-bottom: 4px;
+        }
+        .featured-side .side-card .title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        /* ========== Video Grid ========== */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 24px 0 16px;
+        }
+        .section-header .section-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .section-header .section-title .highlight {
+            color: #fb7299;
+        }
+        .section-header .section-more {
+            font-size: 13px;
+            color: #999;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .section-header .section-more:hover {
+            color: #00a1d6;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        .video-card {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .video-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .video-card .thumb {
+            position: relative;
+            aspect-ratio: 16 / 9;
+            background: #ddd;
+            overflow: hidden;
+        }
+        .video-card .thumb .duration {
+            position: absolute;
+            bottom: 6px;
+            right: 6px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 12px;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+        .video-card .thumb .play-count {
+            position: absolute;
+            bottom: 6px;
+            left: 6px;
+            color: #fff;
+            font-size: 12px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+        }
+        .video-card .info {
+            padding: 10px 12px 12px;
+        }
+        .video-card .info .title {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .video-card .info .meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+        .video-card .info .meta .author {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .video-card .info .meta .author .ava {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ddd;
+            flex-shrink: 0;
+        }
+
+        /* ========== Right Sidebar ========== */
+        .right-sidebar {
+            width: 280px;
+            flex-shrink: 0;
+        }
+        .sidebar-menu {
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #555;
+            border-bottom: 1px solid #f4f4f4;
+            transition: background 0.2s, color 0.2s;
+        }
+        .sidebar-menu a:last-child {
+            border-bottom: none;
+        }
+        .sidebar-menu a:hover {
+            background: #f4f9ff;
+            color: #00a1d6;
+        }
+        .sidebar-menu a .menu-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Sidebar Live Section */
+        .sidebar-live {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .sidebar-live .live-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .sidebar-live .live-header h4 {
+            font-size: 15px;
+        }
+        .sidebar-live .live-header .live-more {
+            font-size: 12px;
+            color: #999;
+        }
+        .sidebar-live .live-item {
+            display: flex;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f4f4f4;
+            cursor: pointer;
+        }
+        .sidebar-live .live-item:last-child {
+            border-bottom: none;
+        }
+        .sidebar-live .live-item .live-cover {
+            width: 60px;
+            height: 60px;
+            border-radius: 6px;
+            background: #ddd;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .sidebar-live .live-item .live-cover .live-badge {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: #ff6b6b;
+            color: #fff;
+            font-size: 10px;
+            padding: 0 5px;
+            border-radius: 3px;
+        }
+        .sidebar-live .live-item .live-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .sidebar-live .live-item .live-info .live-title {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sidebar-live .live-item .live-info .live-author {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .sidebar-live .live-item .live-info .live-viewers {
+            font-size: 11px;
+            color: #fb7299;
+        }
+
+        /* Sidebar Rank */
+        .sidebar-rank {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .sidebar-rank .rank-header {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .sidebar-rank .rank-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f4f4f4;
+            cursor: pointer;
+        }
+        .sidebar-rank .rank-item:last-child {
+            border-bottom: none;
+        }
+        .sidebar-rank .rank-item .rank-num {
+            font-size: 16px;
+            font-weight: 700;
+            width: 22px;
+            text-align: center;
+            color: #bbb;
+        }
+        .sidebar-rank .rank-item .rank-num.top1 { color: #fb7299; }
+        .sidebar-rank .rank-item .rank-num.top2 { color: #f5a623; }
+        .sidebar-rank .rank-item .rank-num.top3 { color: #f5a623; }
+        .sidebar-rank .rank-item .rank-title {
+            flex: 1;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sidebar-rank .rank-item .rank-score {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* ========== Footer ========== */
+        .footer {
+            max-width: 1400px;
+            margin: 40px auto 0;
+            padding: 24px;
+            border-top: 1px solid #e8e8e8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #999;
+        }
+        .footer .footer-links {
+            display: flex;
+            gap: 16px;
+        }
+        .footer .footer-links a:hover {
+            color: #00a1d6;
+        }
+
+        /* ========== Thumbnail Color Backgrounds ========== */
+        .thumb-bg-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .thumb-bg-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .thumb-bg-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .thumb-bg-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .thumb-bg-5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .thumb-bg-6 { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
+        .thumb-bg-7 { background: linear-gradient(135deg, #fccb90 0%, #d57eeb 100%); }
+        .thumb-bg-8 { background: linear-gradient(135deg, #96fbc4 0%, #f9f586 100%); }
+        .thumb-bg-9 { background: linear-gradient(135deg, #fbda61 0%, #ff5acd 100%); }
+        .thumb-bg-10 { background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%); }
+        .thumb-bg-11 { background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%); }
+        .thumb-bg-12 { background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%); }
+
+        /* ========== Responsive tweaks ========== */
+        @media (max-width: 1200px) {
+            .right-sidebar { display: none; }
+            .video-grid { grid-template-columns: repeat(3, 1fr); }
+            body { min-width: auto; }
+        }
+        @media (max-width: 900px) {
+            .video-grid { grid-template-columns: repeat(2, 1fr); }
+            .featured-side { display: none; }
+            .nav-menu a:nth-child(n+5) { display: none; }
+        }
+        @media (max-width: 600px) {
+            .video-grid { grid-template-columns: 1fr; }
+            .hero-banner { height: 200px; }
+            .hero-left .hero-title { font-size: 20px; }
+            .hero-right { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ==================== Top Navigation ==================== -->
+<header class="top-nav">
+    <a class="nav-logo" href="#" aria-label="Bilibili">
+        <svg viewBox="0 0 46 46" fill="none">
+            <rect width="46" height="46" rx="8" fill="#00A1D6"/>
+            <path d="M13 15h20v16H13V15z" fill="#fff"/>
+            <circle cx="18" cy="22" r="3" fill="#00A1D6"/>
+            <circle cx="28" cy="22" r="3" fill="#00A1D6"/>
+            <path d="M16 28c0 0 2 3 7 3s7-3 7-3" stroke="#00A1D6" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+    </a>
+
+    <nav class="nav-menu">
+        <a href="#" class="active">首页</a>
+        <a href="#">番剧</a>
+        <a href="#">直播</a>
+        <a href="#">游戏中心</a>
+        <a href="#">赛事</a>
+        <a href="#">漫画</a>
+        <a href="#">会员购</a>
+    </nav>
+
+    <div class="nav-search">
+        <input type="text" placeholder="绝区零搜打撤" value="绝区零搜打撤">
+        <span class="search-icon">🔍</span>
+    </div>
+
+    <div class="nav-user">
+        <span class="icon-btn">📱</span>
+        <span class="icon-btn">🔔</span>
+        <span class="icon-btn">💬</span>
+        <div class="avatar">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ddd'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' fill='%23999'%3E👤%3C/text%3E%3C/svg%3E" alt="avatar">
+        </div>
+        <button class="upload-btn">投稿</button>
+    </div>
+</header>
+
+<!-- ==================== Hero Banner ==================== -->
+<section class="hero-banner" id="heroBanner">
+    <canvas id="heroCanvas"></canvas>
+    <div class="hero-content">
+        <div class="hero-left">
+            <svg class="bilibili-logo" viewBox="0 0 120 40" fill="none">
+                <rect width="120" height="40" rx="6" fill="rgba(255,255,255,0.15)"/>
+                <text x="60" y="27" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold" font-family="sans-serif">bilibili</text>
+            </svg>
+            <h1 class="hero-title">✨ 奇幻之旅 · 新番降临</h1>
+            <p class="hero-desc">探索未知的世界，与万千同好一起见证每一个精彩瞬间。每日更新，永不剧荒。</p>
+            <a href="#" class="hero-btn">👉 立即观看</a>
+        </div>
+        <div class="hero-right">
+            <!-- SVG illustration of a character on a creature -->
+            <svg viewBox="0 0 360 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background glow -->
+                <ellipse cx="180" cy="200" rx="140" ry="30" fill="rgba(0,161,214,0.2)"/>
+                <!-- Creature body -->
+                <path d="M100 160 Q180 100 260 160 Q280 180 260 200 Q180 220 100 200 Q80 180 100 160Z" fill="#6c5ce7" opacity="0.9"/>
+                <!-- Creature head -->
+                <ellipse cx="180" cy="130" rx="50" ry="40" fill="#a29bfe"/>
+                <!-- Eyes -->
+                <circle cx="165" cy="125" r="8" fill="#fff"/>
+                <circle cx="195" cy="125" r="8" fill="#fff"/>
+                <circle cx="167" cy="125" r="4" fill="#2d3436"/>
+                <circle cx="197" cy="125" r="4" fill="#2d3436"/>
+                <!-- Creature ears -->
+                <ellipse cx="135" cy="110" rx="15" ry="25" fill="#a29bfe" transform="rotate(-20 135 110)"/>
+                <ellipse cx="225" cy="110" rx="15" ry="25" fill="#a29bfe" transform="rotate(20 225 110)"/>
+                <!-- Character on creature -->
+                <circle cx="180" cy="85" r="25" fill="#ffeaa7"/>
+                <!-- Hair -->
+                <path d="M155 80 Q160 50 180 45 Q200 50 205 80" fill="#2d3436"/>
+                <path d="M155 80 Q150 90 148 100" stroke="#2d3436" stroke-width="4" fill="none"/>
+                <path d="M205 80 Q210 90 212 100" stroke="#2d3436" stroke-width="4" fill="none"/>
+                <!-- Eyes -->
+                <circle cx="172" cy="82" r="3" fill="#2d3436"/>
+                <circle cx="188" cy="82" r="3" fill="#2d3436"/>
+                <circle cx="173" cy="81" r="1" fill="#fff"/>
+                <circle cx="189" cy="81" r="1" fill="#fff"/>
+                <!-- Smile -->
+                <path d="M172 90 Q180 96 188 90" stroke="#2d3436" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                <!-- Body -->
+                <path d="M160 108 Q180 115 200 108 L200 130 Q180 140 160 130Z" fill="#fd79a8"/>
+                <!-- Arms -->
+                <path d="M160 115 Q145 120 140 135" stroke="#ffeaa7" stroke-width="6" fill="none" stroke-linecap="round"/>
+                <path d="M200 115 Q215 120 220 135" stroke="#ffeaa7" stroke-width="6" fill="none" stroke-linecap="round"/>
+                <!-- Sparkles -->
+                <text x="50" y="60" font-size="16" fill="#fff" opacity="0.7">✦</text>
+                <text x="300" y="50" font-size="20" fill="#fff" opacity="0.7">✦</text>
+                <text x="320" y="90" font-size="12" fill="#fff" opacity="0.5">✦</text>
+                <text x="40" y="100" font-size="10" fill="#fff" opacity="0.5">✦</text>
+            </svg>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== Main Wrapper ==================== -->
+<div class="main-wrapper">
+
+    <!-- Left Column -->
+    <div class="left-column">
+
+        <!-- Category Navigation -->
+        <div class="category-nav">
+            <div class="cat-item active">
+                <span class="icon orange">🌺</span> 动态
+            </div>
+            <div class="cat-item">
+                <span class="icon red">🔥</span> 热门
+            </div>
+            <div class="tag-group">
+                <span class="tag">番剧</span>
+                <span class="tag">国创</span>
+                <span class="tag">综艺</span>
+                <span class="tag">动画</span>
+                <span class="tag">音乐</span>
+                <span class="tag">舞蹈</span>
+                <span class="tag">游戏</span>
+                <span class="tag">知识</span>
+                <span class="tag">数码</span>
+                <span class="tag">生活</span>
+                <span class="tag hot">鬼畜</span>
+                <span class="tag">时尚</span>
+                <span class="tag">资讯</span>
+                <span class="tag">娱乐</span>
+                <span class="tag">影视</span>
+                <span class="tag">纪录片</span>
+            </div>
+        </div>
+
+        <!-- Featured Section -->
+        <div class="featured-section">
+            <div class="featured-carousel" id="featuredCarousel">
+                <div class="slide active">
+                    <div class="slide-info">
+                        <h3>🎵 VSINGER · 虚拟歌会</h3>
+                        <p>全新虚拟偶像演唱会，声动未来</p>
+                    </div>
+                </div>
+                <div class="slide">
+                    <div class="slide-info">
+                        <h3>🎬 年度动画大赏</h3>
+                        <p>投票选出你心目中的年度最佳</p>
+                    </div>
+                </div>
+                <div class="slide">
+                    <div class="slide-info">
+                        <h3>🕹️ 游戏嘉年华</h3>
+                        <p>众多UP主联机对决，精彩不断</p>
+                    </div>
+                </div>
+                <div class="dots">
+                    <span class="dot active" data-index="0"></span>
+                    <span class="dot" data-index="1"></span>
+                    <span class="dot" data-index="2"></span>
+                </div>
+            </div>
+            <div class="featured-side">
+                <div class="side-card card1">
+                    <div class="label">🎤 演唱会</div>
+                    <div class="title">洛天依全息之夜</div>
+                </div>
+                <div class="side-card card2">
+                    <div class="label">🎮 游戏</div>
+                    <div class="title">原神·枫丹交响</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommended Videos -->
+        <div class="section-header">
+            <h2 class="section-title"><span class="highlight">·</span> 热门推荐</h2>
+            <span class="section-more">查看更多 →</span>
+        </div>
+
+        <div class="video-grid">
+            <!-- Card 1 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-1">
+                    <span class="play-count">▶ 152.3万</span>
+                    <span class="duration">12:34</span>
+                </div>
+                <div class="info">
+                    <div class="title">【4K】绝区零最新PV发布！全新角色展示与战斗系统深度解析</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 游戏情报局</span>
+                        <span>12.3万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-2">
+                    <span class="play-count">▶ 98.7万</span>
+                    <span class="duration">08:21</span>
+                </div>
+                <div class="info">
+                    <div class="title">【VSINGER】虚拟偶像演唱会全程回顾 · 超清收藏版</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> VSINGER官方</span>
+                        <span>8.1万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-3">
+                    <span class="play-count">▶ 67.2万</span>
+                    <span class="duration">15:47</span>
+                </div>
+                <div class="info">
+                    <div class="title">【年度动画】2024年十佳动画推荐 · 每一部都是神作</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 动漫放映厅</span>
+                        <span>5.6万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-4">
+                    <span class="play-count">▶ 43.5万</span>
+                    <span class="duration">06:12</span>
+                </div>
+                <div class="info">
+                    <div class="title">【BDF2024】宅舞接力 · 全国百名舞者共同演绎</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> BDF官方</span>
+                        <span>3.2万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 5 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-5">
+                    <span class="play-count">▶ 234.1万</span>
+                    <span class="duration">03:45</span>
+                </div>
+                <div class="info">
+                    <div class="title">【鬼畜】用唢呐演奏一首流行歌是什么体验？</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 鬼畜区UP主</span>
+                        <span>18.7万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 6 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-6">
+                    <span class="play-count">▶ 89.3万</span>
+                    <span class="duration">22:10</span>
+                </div>
+                <div class="info">
+                    <div class="title">【纪录片】探秘深海 · 从未见过的海洋生物全收录</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 探索频道</span>
+                        <span>4.9万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 7 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-7">
+                    <span class="play-count">▶ 56.8万</span>
+                    <span class="duration">09:33</span>
+                </div>
+                <div class="info">
+                    <div class="title">【教学】从零开始学画画 · 人体结构入门到精通</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 绘画教室</span>
+                        <span>2.1万弹幕</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 8 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-8">
+                    <span class="play-count">▶ 34.2万</span>
+                    <span class="duration">18:05</span>
+                </div>
+                <div class="info">
+                    <div class="title">【硬核】用AI复原千年前古都 · 每一帧都震撼</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 科技未来</span>
+                        <span>1.8万弹幕</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- More Videos -->
+        <div class="section-header">
+            <h2 class="section-title"><span class="highlight">·</span> 正在直播</h2>
+            <span class="section-more">全部直播 →</span>
+        </div>
+
+        <div class="video-grid">
+            <!-- Card 9 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-9" style="position:relative;">
+                    <span style="position:absolute;top:6px;left:6px;background:#ff6b6b;color:#fff;font-size:11px;padding:1px 8px;border-radius:4px;">LIVE</span>
+                    <span class="play-count">▶ 12.5万</span>
+                    <span class="duration">直播中</span>
+                </div>
+                <div class="info">
+                    <div class="title">【直播】绝区零开荒实况 · 挑战最高难度副本</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 游戏达人</span>
+                        <span>3.2万观众</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 10 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-10" style="position:relative;">
+                    <span style="position:absolute;top:6px;left:6px;background:#ff6b6b;color:#fff;font-size:11px;padding:1px 8px;border-radius:4px;">LIVE</span>
+                    <span class="play-count">▶ 8.7万</span>
+                    <span class="duration">直播中</span>
+                </div>
+                <div class="info">
+                    <div class="title">【弹唱】吉他弹唱直播间 · 你想听的歌我都有</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 音乐小王子</span>
+                        <span>2.1万观众</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 11 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-11" style="position:relative;">
+                    <span style="position:absolute;top:6px;left:6px;background:#ff6b6b;color:#fff;font-size:11px;padding:1px 8px;border-radius:4px;">LIVE</span>
+                    <span class="play-count">▶ 6.3万</span>
+                    <span class="duration">直播中</span>
+                </div>
+                <div class="info">
+                    <div class="title">【绘画】3小时速涂 · 今天画一张风景插画</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 画画的小白</span>
+                        <span>1.5万观众</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 12 -->
+            <div class="video-card">
+                <div class="thumb thumb-bg-12" style="position:relative;">
+                    <span style="position:absolute;top:6px;left:6px;background:#ff6b6b;color:#fff;font-size:11px;padding:1px 8px;border-radius:4px;">LIVE</span>
+                    <span class="play-count">▶ 4.1万</span>
+                    <span class="duration">直播中</span>
+                </div>
+                <div class="info">
+                    <div class="title">【桌游】狼人杀高分局 · 看谁才是真正的预言家</div>
+                    <div class="meta">
+                        <span class="author"><span class="ava"></span> 桌游俱乐部</span>
+                        <span>0.9万观众</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==================== Right Sidebar ==================== -->
+    <aside class="right-sidebar">
+
+        <!-- Sidebar Menu -->
+        <div class="sidebar-menu">
+            <a href="#"><span class="menu-icon">📝</span> 专栏</a>
+            <a href="#"><span class="menu-icon">🎉</span> 活动</a>
+            <a href="#"><span class="menu-icon">📺</span> 直播</a>
+            <a href="#"><span class="menu-icon">🏆</span> 赛事</a>
+            <a href="#"><span class="menu-icon">📚</span> 课堂</a>
+            <a href="#"><span class="menu-icon">🎵</span> 音乐</a>
+        </div>
+
+        <!-- Live Section -->
+        <div class="sidebar-live">
+            <div class="live-header">
+                <h4>🟢 正在直播</h4>
+                <span class="live-more">查看更多 →</span>
+            </div>
+            <div class="live-item">
+                <div class="live-cover" style="background:linear-gradient(135deg,#667eea,#764ba2);">
+                    <span class="live-badge">直播</span>
+                </div>
+                <div class="live-info">
+                    <div class="live-title">绝区零开荒挑战</div>
+                    <div class="live-author">游戏达人</div>
+                    <div class="live-viewers">12.5万观看</div>
+                </div>
+            </div>
+            <div class="live-item">
+                <div class="live-cover" style="background:linear-gradient(135deg,#f093fb,#f5576c);">
+                    <span class="live-badge">直播</span>
+                </div>
+                <div class="live-info">
+                    <div class="live-title">吉他弹唱 · 听歌聊天</div>
+                    <div class="live-author">音乐小王子</div>
+                    <div class="live-viewers">8.7万观看</div>
+                </div>
+            </div>
+            <div class="live-item">
+                <div class="live-cover" style="background:linear-gradient(135deg,#4facfe,#00f2fe);">
+                    <span class="live-badge">直播</span>
+                </div>
+                <div class="live-info">
+                    <div class="live-title">3小时速涂风景画</div>
+                    <div class="live-author">画画的小白</div>
+                    <div class="live-viewers">6.3万观看</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ranking -->
+        <div class="sidebar-rank">
+            <div class="rank-header">🏅 热门排行</div>
+            <div class="rank-item">
+                <span class="rank-num top1">1</span>
+                <span class="rank-title">绝区零最新PV深度解析</span>
+                <span class="rank-score">152.3万</span>
+            </div>
+            <div class="rank-item">
+                <span class="rank-num top2">2</span>
+                <span class="rank-title">VSINGER虚拟演唱会全程回顾</span>
+                <span class="rank-score">98.7万</span>
+            </div>
+            <div class="rank-item">
+                <span class="rank-num top3">3</span>
+                <span class="rank-title">年度十佳动画推荐</span>
+                <span class="rank-score">67.2万</span>
+            </div>
+            <div class="rank-item">
+                <span class="rank-num">4</span>
+                <span class="rank-title">BDF2024宅舞接力全记录</span>
+                <span class="rank-score">43.5万</span>
+            </div>
+            <div class="rank-item">
+                <span class="rank-num">5</span>
+                <span class="rank-title">唢呐演奏流行歌曲鬼畜</span>
+                <span class="rank-score">234.1万</span>
+            </div>
+            <div class="rank-item">
+                <span class="rank-num">6</span>
+                <span class="rank-title">探秘深海纪录片全收录</span>
+                <span class="rank-score">89.3万</span>
+            </div>
+        </div>
+
+    </aside>
+</div>
+
+<!-- ==================== Footer ==================== -->
+<footer class="footer">
+    <div class="footer-links">
+        <a href="#">关于我们</a>
+        <a href="#">帮助中心</a>
+        <a href="#">用户协议</a>
+        <a href="#">隐私政策</a>
+        <a href="#">版权声明</a>
+        <a href="#">联系我们</a>
+    </div>
+    <span>© 2024 Bilibili (゜-゜)つロ 干杯~</span>
+</footer>
+
+<!-- ==================== JavaScript ==================== -->
+<script>
+    // ---- Hero Banner Particle Animation ----
+    (function() {
+        const canvas = document.getElementById('heroCanvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let w, h, particles = [];
+
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            w = canvas.width;
+            h = canvas.height;
+            particles = [];
+            for (let i = 0; i < 60; i++) {
+                particles.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: Math.random() * 2 + 1,
+                    dx: (Math.random() - 0.5) * 0.4,
+                    dy: (Math.random() - 0.5) * 0.4,
+                    alpha: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        function animate() {
+            ctx.clearRect(0, 0, w, h);
+            for (const p of particles) {
+                p.x += p.dx;
+                p.y += p.dy;
+                if (p.x < 0) p.x = w;
+                if (p.x > w) p.x = 0;
+                if (p.y < 0) p.y = h;
+                if (p.y > h) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+                ctx.fill();
+            }
+            // Draw connections
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 120) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(255,255,255,${0.08 * (1 - dist / 120)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+        animate();
+    })();
+
+    // ---- Featured Carousel ----
+    (function() {
+        const carousel = document.getElementById('featuredCarousel');
+        if (!carousel) return;
+        const slides = carousel.querySelectorAll('.slide');
+        const dots = carousel.querySelectorAll('.dot');
+        let current = 0;
+        let timer;
+
+        function goTo(index) {
+            slides.forEach((s, i) => {
+                s.classList.toggle('active', i === index);
+            });
+            dots.forEach((d, i) => {
+                d.classList.toggle('active', i === index);
+            });
+            current = index;
+        }
+
+        dots.forEach(d => {
+            d.addEventListener('click', () => {
+                goTo(parseInt(d.dataset.index));
+                clearInterval(timer);
+                timer = setInterval(next, 5000);
+            });
+        });
+
+        function next() {
+            goTo((current + 1) % slides.length);
+        }
+
+        timer = setInterval(next, 5000);
+    })();
+
+    // ---- Category tag click ----
+    document.querySelectorAll('.cat-item, .tag-group .tag').forEach(el => {
+        el.addEventListener('click', function() {
+            if (this.classList.contains('cat-item')) {
+                document.querySelectorAll('.cat-item').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

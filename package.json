@@ -6,14 +6,15 @@
   "main": "./index.mjs",
   "exports": {
     ".": "./index.mjs",
-    "./client": "./lib/client.js"
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=20"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/<your-username>/dsh-tool-visual-primitives"
+    "url": "git+https://github.com/InkshadeWoods/dsh-tool-visual-primitives.git"
   },
   "dsh": {
     "bundle": {
@@ -22,13 +23,19 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes"
       ],
       "platform": "web"
     }
   },
   "devDependencies": {
     "esbuild": "^0.28.2"
+  },
+  "dependencies": {
+    "undici": "^6.21.1"
   },
   "files": [
     "index.mjs",

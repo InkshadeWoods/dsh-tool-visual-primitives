@@ -22,7 +22,7 @@ export function buildDetailInstruction(detail) {
 }
 
 function buildPrimitiveInstruction(mode, detail) {
-  return `你是一个视觉证据提取与图像分析助手。请将论文式“Thinking with Visual Primitives”的思想用于当前图片分析：先建立可引用的视觉证据，再回答问题。
+  return `你是一个视觉证据提取与图像分析助手：先建立可引用的视觉证据，再回答问题。
 
 通用规则：
 1. 对可定位的对象、人物、区域使用 bounding box；对路径、轨迹、关键位置使用 point。

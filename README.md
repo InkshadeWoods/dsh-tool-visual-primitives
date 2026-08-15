@@ -1,156 +1,241 @@
 # dsh-tool-visual-primitives
 
-参考 DeepSeek 论文《Thinking with Visual Primitives》中的视觉原语思路，为 DSH 打造的视觉分析插件。无论图片来自对话上传还是 `vision_analyze`，都会进入同一视觉原语核心：按问题识别视觉任务、调用外部视觉模型，并把纯文本证据交给文本模型继续推理。
+为 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/DeepSeek-Harness) 的纯文本模型补充视觉能力。插件把图片交给外部视觉模型分析，再把带有空间定位信息的**纯文本视觉证据**交回原对话模型；因此，被增强的模型不需要原生图片输入能力。
 
-## 背景
+核心思路参考 DeepSeek 的 [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)：以归一化坐标和可引用对象，将图像理解转化为后续推理可使用、可检查的证据。
 
-当前多模态大语言模型在通用视觉问答基准测试中表现出色，但在需要**精确空间推理**和**复杂视觉分析**的任务中仍存在系统性缺陷。DeepSeek 在 2026 年 5 月发布的论文 **《Thinking with Visual Primitives》** 将这一问题命名为 **"指代鸿沟"（Reference Gap）**：自然语言在精确指向密集空间实体时本质上是模糊的。
-
-论文提出用**归一化坐标的视觉基元**作为可引用的视觉指针：
-
-| 基元 | 格式 | 用途 |
-|:---|:---|:---|
-| **Ref** | `<ref>object_id_or_name</ref>` | 为视觉对象绑定稳定标识 |
-| **Box** | `<box>[[x1,y1,x2,y2]]</box>` | 定位对象或区域的边界框 |
-| **Point** | `<point>[[x,y],[x,y],...]</point>` | 标记路径、轨迹、关键位置 |
-
-坐标统一归一化到 **0–999**：左上角为 `[0,0]`，右下角为 `[999,999]`。
+> 当前版本支持从 GitHub 源码本地挂载。npm 包尚未发布；发布后会补充一行安装命令。
 
 ## 功能
 
-### 11 种分析模式
+- 两个入口，共用同一条 `vision_analyze` 分析核心：显式工具调用与对话中的 `[vision]` 模型。
+- 自动识别 11 类视觉任务：描述、对象清单、多主体、计数、定位、空间关系、比较、路径、拓扑、UI、文档视觉。
+- 三档分析细节：`brief`、`standard`（默认）、`verbose`。
+- 三种视觉原语策略：`auto`（默认）、`on`、`off`；原语使用 `<ref>`、`<box>`、`<point>`，坐标范围为 `0–999`。
+- 仅为你选定的纯文本模型追加 `[vision]` 变体；原模型保留，不受影响。
+- 会话级视觉证据缓存：追问仅在已有证据覆盖新问题时复用，否则重新读图。
+- 原生设置页：安全密钥存储、连接测试、`/models` 搜索选择、手动模型 ID，以及按供应商折叠选择待增强模型。
 
-根据用户提问自动切换：
+## 工作方式
 
-| 模式 | 触发关键词 | 任务重点 |
-|:---|:---|:---|
-| **Caption** | 默认 | 整体图像摘要，标注最关键对象 |
-| **Object Inventory** | "列出" "有哪些" | 主要对象清单，带稳定 id 和位置框 |
-| **Multi-Subject** | "人物" "角色" "从左到右" | 多主体编号分析，带位置和置信度 |
-| **Counting** | "多少个" "数量" "计数" | 统计目标，框出候选，排除项说明 |
-| **Grounding** | "在哪" "哪个位置" | 定位用户提到的对象或区域 |
-| **Spatial Relation** | "左边" "右边" "遮挡" | 空间关系判断，基于 box/point |
-| **Comparison** | "比较" "对比" "vs" | 明确维度，分别列出证据，给出结论 |
-| **Path Tracing** | "路径" "路线" "线条" | 起点 → point 序列 → 终点 |
-| **Topology** | "迷宫" "可达" "通路" | 可达性推理，True/False 结论 |
-| **UI Analysis** | "截图" "界面" "按钮" | UI 元素标注，位置和下一步建议 |
-| **Document Visual** | "表格" "图表" "海报" | 文字结构分析，阅读顺序和视觉层级 |
-
-### Detail 与 Primitives
-
-- **Brief**：只列出回答问题所需的最少视觉证据
-- **Standard**：列出主要视觉证据，给出必要的关系和不确定性
-- **Verbose**：尽量完整列出关键对象、关系和不确定性
-
-Detail 由用户配置，默认 **Standard**。它只控制输出的信息密度，不改变自动识别的视觉任务类型。
-
-Primitives 由用户配置：
-
-- **Auto**（默认）：根据 Mode、Detail 自动决定是否要求坐标化视觉原语
-- **On**：强制要求 `<ref>`、`<box>`、`<point>` 等视觉原语
-- **Off**：仅输出可用的纯文本视觉证据，不要求视觉原语标签
-
-### Retry 机制
-
-当 Primitives 已启用且模型输出缺少必要的 `<ref>`、`<box>` 或 `<point>` 标记时：
-- **Off**：不重试，返回原始结果
-- **On**：重新基于图片分析，严格按格式输出
-- **Format-only**：保持上一轮结论，只补齐和整理视觉基元格式
-
-### 两个入口，一个核心
-
-| 模式 | 工作方式 | 用户体验 |
-|:---|:---|:---|
-| **显式分析入口** | 调用 `vision_analyze`，参数传 `image_path` 或 `url` | 适合外部图片与高级分析 |
-| **对话视觉入口** | 包装纯文本模型，接收对话附件 | 直接粘贴图片；当前问题会进入同一视觉原语核心 |
-
-执行顺序：`detectVisionMode()` → `shouldUsePrimitives()` → `buildVisionPrompt()`。
-
-### 桥接显示方式
-
-当前桥接在模型选择器中使用固定的 append 显示方式：
-
-| 模式 | 效果 |
-|:---|:---|
-| **append**（默认） | 原模型 + `[vision]` 变体都显示 |
-
-两种模式下桥接模型都保留原名 + `[vision]` 后缀，便于一眼识别哪些模型开启了桥接（带后缀的 = 开了桥接，不带的 = 没开）。
-
-> `replace` 模式预留给未来 DSH 版本（支持隐藏其他 provider 时使用）。
-
-## 安装
-
-### 方式一：npm（推荐）
-
-```powershell
-dsh plugin --profile web add dsh-tool-visual-primitives
+```text
+图片 + 用户问题
+      │
+      ▼
+detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
+      │
+      ▼
+外部视觉模型（OpenAI 兼容 Chat Completions）
+      │
+      ▼
+纯文本视觉证据（可含坐标化 primitives）
+      │
+      ▼
+原始文本模型继续回答
 ```
 
-### 方式二：本地克隆
+`Mode` 与 `Detail` 是正交控制：Mode 决定任务，Detail 决定信息密度。`Primitives` 决定是否强制结构化的空间证据。
+
+## 前置条件
+
+- 已可运行的 DSH **Web Profile**。
+- Node.js `>= 20` 与 pnpm。
+- 一个可访问的视觉模型服务。默认使用 OpenAI 兼容端点：
+  - `POST <Base URL>/chat/completions`
+  - 可选模型目录：`GET <Base URL>/models`
+
+视觉服务与被增强的文本模型可以来自不同供应商。
+
+## 安装：从 GitHub 源码本地挂载
+
+这是当前已验证的安装方式。如使用其他目录，请同步调整 `$source`。
 
 ```powershell
-cd ~\.dsh\profiles\web\plugins
-git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
-# 重启 DSH，硬刷新浏览器（Ctrl+Shift+R）
+$source = 'D:\DSH\dsh-tool-visual-primitives'
+git clone https://github.com/InkshadeWoods/dsh-tool-visual-primitives.git $source
+
+Set-Location $source
+pnpm install
+pnpm run build
+
+Set-Location "$env:USERPROFILE\.dsh\profiles\web"
+pnpm add "link:$source"
 ```
 
-## 配置
-
-1. 打开 DSH **设置** 面板
-2. 找到 **视觉分析** 页面
-3. 填写凭证：
-   - **API Key**：视觉模型 API 密钥
-   - **Base URL**：OpenAI 兼容端点
-   - **Model**：视觉模型名称
-4. 点击 **测试连接** 验证配置
-5. 调整 Detail、Visual Primitives、Retry 等分析参数
-6. 保存
-
-### 凭证解析顺序
-
-1. `ctx.credentials.resolve()`（DSH 凭据存储 / `~/.dsh/.credentials.yaml`）
-2. 环境变量（`VISION_API_KEY`、`VISION_BASE_URL`、`VISION_MODEL`）
-
-## 使用
-
-### 显式分析入口
+然后在 `C:\Users\<你的用户名>\.dsh\profiles\web\package.json` 的 `dsh.profile.bundles` 数组中追加一次 `dsh-tool-visual-primitives`。保留全部已有条目，例如：
 
 ```json
 {
-  "image_path": "/path/to/image.png",
-  "prompt": "图中有多少个物体？"
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-tool-visual-primitives"
+      ]
+    }
+  }
+}
+```
+
+完整重启 DSH：
+
+```powershell
+npx @deepseek-ai/dsh web
+```
+
+首次更新客户端界面时，请在浏览器按 `Ctrl+Shift+R` 强制刷新。
+
+### 卸载
+
+从 Profile 的 `package.json` 中移除 `dsh-tool-visual-primitives` 依赖及 `dsh.profile.bundles` 中对应条目，在 Profile 目录执行：
+
+```powershell
+pnpm install
+```
+
+重启 DSH 即可。密钥由 DSH 凭据服务管理；如不再需要，请在插件设置页点击“清除 API Key”。
+
+## 首次配置
+
+打开 DSH **设置 → 视觉分析**，按顺序完成：
+
+1. 填写 **API Key**、**Base URL** 与视觉模型。
+2. 点击 **加载模型**：插件从 `<Base URL>/models` 获取可搜索列表。
+3. 若服务不提供模型目录，直接填写 **自定义模型 ID**。
+4. 点击 **测试连接**。
+5. 配置分析参数，并在“对话视觉模型”中勾选希望追加 `[vision]` 的纯文本模型。
+
+已保存的 API Key 不会在重新打开页面时回显；填写新值会覆盖旧值，点击“清除 API Key”才会删除它。
+
+### API 与模型目录
+
+| 项目 | 行为 |
+| --- | --- |
+| 视觉请求 | `POST <Base URL>/chat/completions`，使用 `Authorization: Bearer <API Key>` |
+| 模型列表 | `GET <Base URL>/models`，使用 `Accept: application/json` 与同一 API Key |
+| 模型列表失败 | 仍可直接填写自定义模型 ID，不影响视觉分析 |
+| 小米 Mimo URL | 自动改用 `api-key` 请求头 |
+
+## 分析参数
+
+| 设置 | 选项 / 默认值 | 作用 |
+| --- | --- | --- |
+| 视觉基元 | `auto` / `on` / `off`（默认 `auto`） | `auto` 根据 Mode 与 Detail 判断；`on` 强制坐标化证据；`off` 只要求纯文本证据。 |
+| 分析细节 | `brief` / `standard` / `verbose`（默认 `standard`） | 控制输出密度，不改变任务类型。 |
+| 重试模式 | `off` / `on` / `format-only`（默认 `off`） | 原语缺失时，`on` 重新读图；`format-only` 尽量保留结论，仅补齐格式。 |
+| 最大图片大小 | `10 MB` | 本地、远程与对话附件均受上限约束。 |
+| 超时 | `180000 ms` | 单次视觉模型请求的最长等待时间。 |
+| 输出 Token 预算 | `auto` 或手动值（默认 `auto`） | `auto` 跟随 Detail：brief `1024`、standard `2048`、verbose `4096`。 |
+
+## 11 种自动分析模式
+
+| Mode | 适合的问题 | 证据重点 |
+| --- | --- | --- |
+| `caption` | “这张图是什么？” | 整体摘要与关键对象 |
+| `object_inventory` | “图里有哪些物体？” | 主要对象清单与位置 |
+| `multi_subject` | “从左到右有哪些人？” | 主体编号、特征与位置 |
+| `counting` | “有几个按钮？” | 候选对象、排除项与数量 |
+| `grounding` | “红色按钮在哪里？” | 目标及候选位置 |
+| `spatial_relation` | “A 在 B 的哪边？” | 上下左右、遮挡、包含等关系 |
+| `comparison` | “比较这两个区域” | 比较维度与分别可见证据 |
+| `path_tracing` | “路线怎么走？” | 起点、关键点、终点与不确定处 |
+| `topology` | “迷宫是否可达？” | 连通性、阻断与结论 |
+| `ui_analysis` | “这个界面怎么操作？” | UI 元素、状态、位置与下一步建议 |
+| `document_visual` | “解读这张图表/海报” | 标题、文本块、表格、阅读顺序 |
+
+优先级最高的关键词决定 Mode；没有匹配时使用 `caption`。例如“这个界面有几个按钮？”会识别为 `ui_analysis`，再叠加所选 Detail。
+
+## 使用方式
+
+### 方式一：在对话中使用 `[vision]`
+
+1. 在插件设置的“对话视觉模型”中勾选一个纯文本模型。
+2. 重新打开对话模型列表，选择新增的 `模型名 [vision]`。
+3. 上传、粘贴或拖入图片，并直接提出问题。
+
+插件仅将图像块替换为视觉证据文本；最终回答仍由所选的原文本模型生成。
+
+对于明确指向当前会话最近图片的追问，插件会检查缓存证据是否覆盖新的任务、细节与关注对象/位置。覆盖不足时会重新分析图片，而不是把不充分的旧答案当作事实。
+
+### 方式二：显式调用 `vision_analyze`
+
+工具接收**且只接收一个**图片来源：本地绝对路径或 HTTP(S) URL。
+
+```json
+{
+  "image_path": "D:/images/dashboard.png",
+  "prompt": "统计界面上可点击的主要按钮，并标出它们的位置"
 }
 ```
 
 ```json
 {
-  "url": "https://example.com/image.png",
-  "prompt": "找出图中的红色按钮位置"
+  "url": "https://example.com/chart.png",
+  "prompt": "解读图表的趋势，并说明读不清的标签"
 }
 ```
 
-### 对话视觉入口
+远程 URL 不允许指向 localhost、私有网络地址或携带用户名/密码；重定向会被拒绝，以降低服务器端请求伪造风险。
 
-1. 在模型选择器中选择带 `[vision]` 后缀的模型
-2. 直接在对话中粘贴或拖入图片
-3. 图片将结合当前问题转换为视觉原语纯文本证据，送进同一模型继续推理
+### 视觉证据格式
+
+启用视觉原语时，外部视觉模型会被要求按如下标题返回：
+
+```text
+[Mode]
+[Visual Primitives]
+[Observations]
+[Relations]
+[Uncertainty]
+[Answer]
+```
+
+定位信息示例：
+
+```text
+<ref>submit_button</ref><box>[[742, 861, 900, 930]]</box>
+<point>[[125, 430], [210, 430], [300, 510]]</point>
+```
+
+所有坐标均为相对 `0–999`，不是原图像素。
+
+## 已验证的端到端场景
+
+测试素材和结果均保存在 [`test/`](test/)。
+
+| 场景 | 已验证结果 |
+| --- | --- |
+| 对话图片理解 | `[vision]` 模型成功读取 DSH 使用模式对比图，并向文本模型提供结构化图像说明。 |
+| 截图驱动的 UI 复刻 | `[vision]` 模型理解 Bilibili 首页截图后，文本模型据此生成了一个独立的 Bilibili 风格 HTML 页面。 |
+
+**图片理解结果**
+
+![对话视觉入口成功读取图片](test/test-1-Read_Image_Information.png)
+
+**UI 复刻过程与结果**
+
+![对截图进行 UI 复刻的对话](test/test-2-Replicate_Image_UI.png)
+
+![根据视觉证据生成的 HTML 页面](test/test-2-Replicate_UI_Display.png)
+
+这些结果证明的是当前版本的端到端链路；生成效果仍取决于外部视觉模型、文本模型、提示词和图片质量。
 
 ## 开发
 
-```bash
-npm install
-npm run build
+```powershell
+pnpm install
+pnpm run build
 ```
 
-## License
+`pnpm run build` 生成浏览器端包 `lib/client.js`。服务端入口为 `index.mjs`，修改后需重启 DSH；修改客户端界面后还需强制刷新浏览器。
 
-MIT
+## 许可证
 
-## 致谢
+[MIT](LICENSE)
 
-本插件的 Provider 桥接框架参考了 [modlens](https://github.com/liustack/modlens) 的设计思路。
+## 致谢与参考
 
-## 参考
-
-- DeepSeek 论文：[Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives) (2026.05)
-- 论文 PDF：[Thinking_with_Visual_Primitives.pdf](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives/blob/main/Thinking_with_Visual_Primitives.pdf)
+- [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)
+- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)
+- Provider 桥接设计参考 [modlens](https://github.com/liustack/modlens)

@@ -1,156 +1,241 @@
 # dsh-tool-visual-primitives
 
-DSH vision analysis plugin inspired by DeepSeek's "Thinking with Visual Primitives" paper. Images from either a chat attachment or `vision_analyze` enter the same visual-primitives core: it identifies the visual task from the question, calls an external vision model, and returns pure-text evidence to the text model.
+A [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) plugin that gives text-only chat models a visual capability. It sends an image to an external vision model, then returns **plain-text visual evidence**—optionally with spatial references—to the original chat model. The chat model itself does not need native image input.
 
-## Background
+The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives): normalized coordinates and referenceable objects turn image understanding into evidence that later reasoning can inspect and use.
 
-Current Multimodal LLMs perform well on general VQA benchmarks but struggle with precise spatial reasoning and complex visual analysis. DeepSeek's paper **"Thinking with Visual Primitives" (2026.05)** identifies this as the **Reference Gap**: natural language is too ambiguous to precisely point to dense spatial entities during reasoning.
+> The current release supports local source mounting from GitHub. The npm package has not been published yet; a one-line package installation command will be added after publication.
 
-The paper proposes using **normalized visual primitives** as referenceable pointers:
+## Highlights
 
-| Primitive | Format | Use Case |
-|:---|:---|:---|
-| **Ref** | `<ref>object_id_or_name</ref>` | Bind stable identifiers to visual objects |
-| **Box** | `<box>[[x1,y1,x2,y2]]</box>` | Localize objects or regions |
-| **Point** | `<point>[[x,y],[x,y],...]</point>` | Mark paths, trajectories, key positions |
+- Two entry points backed by one `vision_analyze` core: an explicit tool and `[vision]` chat-model variants.
+- Automatic detection of 11 visual tasks: captioning, inventory, multi-subject, counting, grounding, spatial relation, comparison, path tracing, topology, UI, and document visual analysis.
+- Three output-detail levels: `brief`, `standard` (default), and `verbose`.
+- Three visual-primitive policies: `auto` (default), `on`, and `off`. Primitives use `<ref>`, `<box>`, and `<point>` with normalized `0–999` coordinates.
+- Appends `[vision]` variants only for the text-only chat models you choose; original models stay unchanged.
+- Session-scoped evidence caching: a follow-up reuses evidence only when it covers the new question; otherwise the image is read again.
+- Native settings page for secure credential storage, connection checks, searchable `/models` discovery, custom model IDs, and collapsible provider/model selection.
 
-Coordinates are normalized to **0–999**: top-left is `[0,0]`, bottom-right is `[999,999]`.
+## How It Works
 
-## Features
-
-### 11 Analysis Modes
-
-Auto-detected from user prompt keywords:
-
-| Mode | Trigger Keywords | Focus |
-|:---|:---|:---|
-| **Caption** | default | Overall summary, key objects |
-| **Object Inventory** | "list", "what items" | Main objects with stable IDs and boxes |
-| **Multi-Subject** | "people", "characters", "left to right" | Numbered subjects with positions |
-| **Counting** | "how many", "count" | Enumeration with exclusions |
-| **Grounding** | "where", "which location" | Object localization |
-| **Spatial Relation** | "left", "right", "overlap" | Spatial reasoning with boxes |
-| **Comparison** | "compare", "vs" | Evidence-based comparison |
-| **Path Tracing** | "path", "route", "trace" | Start → point sequence → end |
-| **Topology** | "maze", "reachable" | Reachability: True/False |
-| **UI Analysis** | "screenshot", "UI", "button" | UI element annotation |
-| **Document Visual** | "table", "chart", "poster" | Document structure and reading order |
-
-### Detail and Primitives
-
-- **Brief**: Minimum visual evidence necessary
-- **Standard**: Main evidence with relations and uncertainties
-- **Verbose**: Comprehensive objects, relations, uncertainties
-
-Detail is user-configured and defaults to **Standard**. It controls information density only; it does not change the automatically detected visual task.
-
-Primitives are user-configured:
-
-- **Auto** (default): decides whether coordinate-based visual primitives are needed from Mode and Detail
-- **On**: requires visual primitives such as `<ref>`, `<box>`, and `<point>`
-- **Off**: returns usable pure-text visual evidence without requiring primitive tags
-
-### Retry Mechanism
-
-When Primitives are enabled and output is missing required markers (`<ref>`, `<box>`, `<point>`):
-- **Off**: Return raw result
-- **On**: Re-analyze from image
-- **Format-only**: Keep conclusions, fix formatting
-
-### Two Entrances, One Core
-
-| Mode | How It Works | User Experience |
-|:---|:---|:---|
-| **Explicit analysis** | Call `vision_analyze` with `image_path` or `url` | External images and advanced analysis |
-| **Chat vision** | Wrap a text-only model to receive chat attachments | Paste images directly; the current question enters the same core |
-
-Execution order: `detectVisionMode()` → `shouldUsePrimitives()` → `buildVisionPrompt()`.
-
-### Bridge Display
-
-The bridge currently uses a fixed append display mode in the model selector:
-
-| Mode | Effect |
-|:---|:---|
-| **append** (default) | Original models + `[vision]` variants both shown |
-
-In both modes, bridged models keep the original name + `[vision]` suffix for clear identification (suffixed = bridge active, unsuffixed = no bridge).
-
-> `replace` mode is reserved for a future DSH release that supports hiding other providers.
-
-## Installation
-
-### Option 1: npm (recommended)
-
-```powershell
-dsh plugin --profile web add dsh-tool-visual-primitives
+```text
+Image + user question
+        │
+        ▼
+detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
+        │
+        ▼
+External vision model (OpenAI-compatible Chat Completions)
+        │
+        ▼
+Plain-text visual evidence (optionally with primitives)
+        │
+        ▼
+Original text model continues the answer
 ```
 
-### Option 2: Local clone
+`Mode` and `Detail` are orthogonal: Mode selects the task, while Detail controls information density. `Primitives` decides whether structured spatial evidence is required.
+
+## Requirements
+
+- A working DSH **Web Profile**.
+- Node.js `>= 20` and pnpm.
+- An accessible vision-model service. By default the plugin uses OpenAI-compatible endpoints:
+  - `POST <Base URL>/chat/completions`
+  - Optional model discovery: `GET <Base URL>/models`
+
+The vision provider and the enhanced text-model provider may be different.
+
+## Install from a Local GitHub Clone
+
+This is the installation path verified for the current release. You may use another source directory if you also update `$source`.
 
 ```powershell
-cd ~\.dsh\profiles\web\plugins
-git clone https://github.com/<your-username>/dsh-tool-visual-primitives.git
-# Restart DSH, hard refresh browser (Ctrl+Shift+R)
+$source = 'D:\DSH\dsh-tool-visual-primitives'
+git clone https://github.com/InkshadeWoods/dsh-tool-visual-primitives.git $source
+
+Set-Location $source
+pnpm install
+pnpm run build
+
+Set-Location "$env:USERPROFILE\.dsh\profiles\web"
+pnpm add "link:$source"
 ```
 
-## Configuration
+Then append the package name once to `dsh.profile.bundles` in `C:\Users\<your-user>\.dsh\profiles\web\package.json`. Keep all existing entries:
 
-1. Open DSH **Settings** panel
-2. Find **Vision Analysis** page
-3. Fill in credentials:
-   - **API Key**: Vision model API key
-   - **Base URL**: OpenAI-compatible endpoint
-   - **Model**: Vision model name
-4. Click **Test Connection** to verify
-5. Adjust Detail, Visual Primitives, Retry, and other analysis parameters
-6. Save
+```json
+{
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-tool-visual-primitives"
+      ]
+    }
+  }
+}
+```
 
-### Credential Resolution Order
+Restart DSH completely:
 
-1. `ctx.credentials.resolve()` (DSH credential store / `~/.dsh/.credentials.yaml`)
-2. Environment variables (`VISION_API_KEY`, `VISION_BASE_URL`, `VISION_MODEL`)
+```powershell
+npx @deepseek-ai/dsh web
+```
+
+When the client UI changes for the first time, force-refresh the browser with `Ctrl+Shift+R`.
+
+### Uninstall
+
+Remove both the `dsh-tool-visual-primitives` dependency and its `dsh.profile.bundles` entry from the Profile's `package.json`, then run this in the Profile directory:
+
+```powershell
+pnpm install
+```
+
+Restart DSH. Credentials are managed by the DSH credential service; clear an API key from the plugin settings page when it is no longer needed.
+
+## First-Time Setup
+
+Open **Settings → Vision Analysis** in DSH, then:
+
+1. Enter the **API Key**, **Base URL**, and vision model.
+2. Select **Load models** to retrieve `<Base URL>/models`; the list is searchable.
+3. If the service does not expose a model directory, enter a **Custom model ID** instead.
+4. Select **Test connection**.
+5. Configure analysis parameters, then choose the text-only chat models that should receive a `[vision]` variant.
+
+Saved API keys are never shown again when the page is reopened. Entering a new value replaces the old key; **Clear API Key** removes it.
+
+### API and Model Discovery
+
+| Item | Behavior |
+| --- | --- |
+| Vision request | `POST <Base URL>/chat/completions` with `Authorization: Bearer <API Key>` |
+| Model discovery | `GET <Base URL>/models` with `Accept: application/json` and the same API key |
+| Discovery failure | A custom model ID remains available and does not prevent vision analysis |
+| Xiaomi Mimo URLs | The plugin automatically uses the `api-key` header |
+
+## Analysis Parameters
+
+| Setting | Options / default | Purpose |
+| --- | --- | --- |
+| Visual primitives | `auto` / `on` / `off` (default: `auto`) | `auto` decides from Mode and Detail; `on` forces coordinate-based evidence; `off` requests plain-text evidence only. |
+| Analysis detail | `brief` / `standard` / `verbose` (default: `standard`) | Controls output density; it does not alter task detection. |
+| Retry mode | `off` / `on` / `format-only` (default: `off`) | When required primitives are missing, `on` re-reads the image; `format-only` preserves conclusions where possible and repairs formatting. |
+| Maximum image size | `10 MB` | Applies to local files, remote images, and chat attachments. |
+| Timeout | `180000 ms` | Maximum wait for one vision-model request. |
+| Output-token budget | `auto` or manual (default: `auto`) | `auto` follows Detail: brief `1024`, standard `2048`, verbose `4096`. |
+
+## The 11 Auto-Detected Modes
+
+| Mode | Best for | Evidence focus |
+| --- | --- | --- |
+| `caption` | “What is this image?” | Overall summary and key objects |
+| `object_inventory` | “What objects are present?” | Main-object list and positions |
+| `multi_subject` | “Who is shown left to right?” | Subject ordering, features, and positions |
+| `counting` | “How many buttons?” | Candidates, exclusions, and count |
+| `grounding` | “Where is the red button?” | Target and candidate locations |
+| `spatial_relation` | “Which side is A on?” | Relative position, occlusion, containment |
+| `comparison` | “Compare these two areas” | Dimensions and visible evidence for each side |
+| `path_tracing` | “How does the route go?” | Start, key points, end, uncertainty |
+| `topology` | “Is the maze solvable?” | Connectivity, blockers, and conclusion |
+| `ui_analysis` | “How do I use this screen?” | UI elements, state, location, next step |
+| `document_visual` | “Explain this chart/poster” | Headings, text blocks, tables, reading order |
+
+The highest-priority keyword match wins; `caption` is used when nothing matches. For example, “How many buttons are on this screen?” selects `ui_analysis` and then applies the selected Detail level.
 
 ## Usage
 
-### Explicit Analysis
+### Option 1: Chat with a `[vision]` Model
+
+1. In **Chat visual models** settings, enable a text-only model.
+2. Reopen the model list and select the new `Model name [vision]` entry.
+3. Upload, paste, or drop an image, then ask your question normally.
+
+The plugin replaces only image blocks with visual-evidence text. The selected original text model still produces the final answer.
+
+For a follow-up that explicitly refers to the latest image, the plugin checks whether cached evidence covers the new task, detail level, and requested objects/locations. It re-analyzes the image when coverage is insufficient rather than treating an incomplete previous answer as fact.
+
+### Option 2: Explicit `vision_analyze` Tool
+
+The tool accepts **exactly one** image source: a local absolute path or an HTTP(S) URL.
 
 ```json
 {
-  "image_path": "/path/to/image.png",
-  "prompt": "How many objects are in this image?"
+  "image_path": "D:/images/dashboard.png",
+  "prompt": "Count the main clickable buttons and identify their positions"
 }
 ```
 
 ```json
 {
-  "url": "https://example.com/image.png",
-  "prompt": "Locate the red button"
+  "url": "https://example.com/chart.png",
+  "prompt": "Explain the chart trend and identify unreadable labels"
 }
 ```
 
-### Chat Vision
+Remote URLs cannot target localhost, private-network addresses, or include credentials. Redirects are rejected to reduce server-side request forgery risk.
 
-1. Select a model with `[vision]` suffix in the model selector
-2. Paste or drop images directly into the conversation
-3. Images are converted into visual-primitives text evidence for the current question and fed to the same model
+### Evidence Format
+
+When primitives are enabled, the external vision model is instructed to return evidence under these headings:
+
+```text
+[Mode]
+[Visual Primitives]
+[Observations]
+[Relations]
+[Uncertainty]
+[Answer]
+```
+
+Location evidence looks like this:
+
+```text
+<ref>submit_button</ref><box>[[742, 861, 900, 930]]</box>
+<point>[[125, 430], [210, 430], [300, 510]]</point>
+```
+
+All coordinates are relative `0–999` values, not source-image pixels.
+
+## Verified End-to-End Scenarios
+
+All assets and results are in [`test/`](test/).
+
+| Scenario | Verified outcome |
+| --- | --- |
+| Chat image understanding | A `[vision]` model successfully read a DSH usage-mode comparison image and supplied a structured description to the text model. |
+| Screenshot-driven UI recreation | A `[vision]` model interpreted a Bilibili home-page screenshot; the text model then generated an independent Bilibili-style HTML page from that evidence. |
+
+**Image-understanding result**
+
+![Successful image reading through the chat-vision entry](test/test-1-Read_Image_Information.png)
+
+**UI recreation flow and result**
+
+![Conversation that recreates a UI from a screenshot](test/test-2-Replicate_Image_UI.png)
+
+![HTML page generated from visual evidence](test/test-2-Replicate_UI_Display.png)
+
+These outcomes validate the current end-to-end chain. Generated results still depend on the external vision model, text model, prompt, and image quality.
 
 ## Development
 
-```bash
-npm install
-npm run build
+```powershell
+pnpm install
+pnpm run build
 ```
+
+`pnpm run build` generates the client bundle at `lib/client.js`. The server entry is `index.mjs`: restart DSH after changing it. Force-refresh the browser after changing the client UI.
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
-## Acknowledgments
+## Acknowledgements and References
 
-The provider bridge framework of this plugin draws inspiration from [modlens](https://github.com/liustack/modlens).
-
-## References
-
-- DeepSeek paper: [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives) (2026.05)
-- Paper PDF: [Thinking_with_Visual_Primitives.pdf](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives/blob/main/Thinking_with_Visual_Primitives.pdf)
+- [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)
+- [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)
+- The provider-bridge design draws inspiration from [modlens](https://github.com/liustack/modlens)

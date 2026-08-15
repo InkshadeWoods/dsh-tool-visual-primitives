@@ -1,4 +1,5 @@
 import { analyzeVision } from "../vision/analysis-core.mjs";
+import { createEvidenceCache } from "../vision/evidence-cache.mjs";
 
 function parseToolInput(args) {
   const hasPath = typeof args.image_path === "string" && args.image_path.trim().length > 0;
@@ -11,6 +12,7 @@ function parseToolInput(args) {
 }
 
 export function registerVisionTool(ctx, config) {
+  const evidenceCache = createEvidenceCache();
   ctx.tools.register({
     name: "vision_analyze",
     description: "Analyze an image through the visual-primitives pipeline and return pure-text evidence for a text-only model. Provide exactly one of image_path or url. The analysis mode is inferred from prompt; detail and visual-primitives format use the configured settings.",
@@ -23,7 +25,8 @@ export function registerVisionTool(ctx, config) {
       schema: {
         type: "object",
         additionalProperties: false,
-        properties: { text: { type: "string", required: true } },
+        required: ["text"],
+        properties: { text: { type: "string" } },
       },
       render: (_args, value) => [{ type: "text", text: value.text }],
     },
@@ -31,7 +34,7 @@ export function registerVisionTool(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const request = parseToolInput(args);
-      const evidence = await analyzeVision(ctx, { ...request, signal: exec.signal }, config);
+      const evidence = await analyzeVision(ctx, { ...request, signal: exec.signal }, config, evidenceCache);
       return { text: evidence.text };
     },
   });
