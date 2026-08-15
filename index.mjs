@@ -300,24 +300,35 @@ async function imageFromLocal(ctx, imagePath, maxBytes, signal) {
 }
 
 /** Fetch a remote image into a base64 data URL. */
-async function imageFromUrl(url, signal) {
+async function imageFromUrl(url, signal, maxBytes) {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`fetch image ${response.status}: ${(await response.text()).slice(0, 300)}`);
+
+  // Enforce max image size (content-length check + actual byte count)
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (maxBytes && contentLength > maxBytes) {
+    throw new Error(`image size ${contentLength} bytes exceeds maxImageBytes ${maxBytes}`);
+  }
   const bytes = new Uint8Array(await response.arrayBuffer());
+  if (maxBytes && bytes.length > maxBytes) {
+    throw new Error(`image size ${bytes.length} bytes exceeds maxImageBytes ${maxBytes}`);
+  }
   const contentType = response.headers.get("content-type") || "";
   const m = /^image\/([a-z0-9.+-]+)/i.exec(contentType);
-  const mediaType = m ? m[1].replace("svg", "jpeg") : "jpeg";
+  // Normalize "svg+xml" → "jpeg" (SVG data URLs are not accepted by vision APIs)
+  const rawSub = m ? m[1].toLowerCase() : "";
+  const mediaType = rawSub.startsWith("svg") ? "jpeg" : rawSub || "jpeg";
   return { mediaType, dataUrl: `data:image/${mediaType};base64,${Buffer.from(bytes).toString("base64")}` };
 }
 
 // ── credential resolution (inline, no dsh-credentials) ───────────────────
 
 async function resolveCredential(ctx, envName) {
-  // Try ctx.credentials first (if available)
+  // Try ctx.credentials first (DSH credential service)
   const credentials = ctx.get?.("credentials");
   if (credentials?.resolve) {
     try {
-      const hit = await credentials.resolve({ type: "env", name: envName });
+      const hit = await credentials.resolve(envName);
       if (hit?.value) return hit.value;
     } catch {
       // fall through to env
@@ -348,7 +359,7 @@ async function analyzeImage(ctx, args, exec, cfg) {
 
   const image = args.image_path !== void 0
     ? await imageFromLocal(ctx, args.image_path, cfg.maxImageBytes, exec.signal)
-    : await imageFromUrl(args.url, exec.signal);
+    : await imageFromUrl(args.url, exec.signal, cfg.maxImageBytes);
 
   const enhancedPrompt = usePrimitives
     ? `${buildPrimitiveInstruction(mode, detail)}\n\n用户问题：\n${prompt}`
@@ -435,8 +446,9 @@ async function readImageBlock(ctx, block, signal, cfg, cache) {
       throw new Error("attachments.readImage returned no data");
     }
 
-    const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType;
-    const ext = MEDIA_EXT[mediaType] || "png";
+    const rawMediaType = stored.ref?.mediaType ?? block.attachment?.mediaType;
+    // Normalize "image/png" → "png" for MIME_MAP lookup
+    const ext = MIME_MAP[rawMediaType?.split("/").pop()?.toLowerCase()] || rawMediaType || "png";
     const dataUrl = `data:image/${ext};base64,${Buffer.from(stored.data).toString("base64")}`;
 
     // Check cache for this attachment
@@ -445,7 +457,7 @@ async function readImageBlock(ctx, block, signal, cfg, cache) {
       return { type: "text", text: cache.get(cacheKey) };
     }
 
-    const prompt = "Describe this image in detail.";
+    const prompt = "请详细描述这张图片的内容。";
     const mode = detectVisionMode(prompt);
     const primitives = normalizeOption(cfg.primitives, "auto", VALID_PRIMITIVE_MODES);
     const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
