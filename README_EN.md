@@ -58,14 +58,13 @@ When output is missing required markers (`<ref>`, `<box>`, `<point>`):
 
 ### Bridge Display Modes
 
-When bridge mode is active, control how models appear in the selector:
-
 | Mode | Effect |
 |:---|:---|
 | **append** (default) | Original models + `[vision]` variants both shown |
-| **replace** | Only `[vision]` variants shown |
 
-In both modes, bridged models keep the original name + `[vision]` suffix for clear identification.
+In both modes, bridged models keep the original name + `[vision]` suffix for clear identification (suffixed = bridge active, unsuffixed = no bridge).
+
+> `replace` mode is reserved for future DSH releases that support hiding other providers.
 
 ## Installation
 

@@ -337,7 +337,7 @@ async function analyzeImage(ctx, args, exec, cfg) {
   if (!baseURL) throw new Error(`vision credential "${cfg.baseUrlEnv}" is not configured`);
   if (!model) throw new Error(`vision credential "${cfg.modelEnv}" is not configured`);
 
-  const prompt = (args.prompt || "请详细描述这张图片的内容。").trim();
+  const prompt = (args.prompt || "Describe this image in detail.").trim();
   const mode = detectVisionMode(prompt);
   const primitives = normalizeOption(cfg.primitives, "auto", VALID_PRIMITIVE_MODES);
   const detail = normalizeOption(cfg.detail, "standard", VALID_DETAIL_LEVELS);
@@ -436,7 +436,9 @@ async function readImageBlock(ctx, block, signal, cfg, cache) {
     }
 
     const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType;
-    const ext = MEDIA_EXT[mediaType] || "png";
+    // Normalize "image/png" → "png" for MIME_MAP lookup
+    const normalized = mediaType ? mediaType.split("/").pop() : null;
+    const ext = MEDIA_EXT[normalized] || "png";
     const dataUrl = `data:image/${ext};base64,${Buffer.from(stored.data).toString("base64")}`;
 
     // Check cache for this attachment
@@ -500,9 +502,8 @@ function registerVisionProvider(ctx, cfg) {
 
   // bridgeMode:
   //   "append"  = show original models + [vision] variants (default)
-  //   "replace" = show only [vision] variants (no originals)
-  // Bridged models keep the original name + [vision] suffix in both modes.
-  const bridgeDisplay = cfg.bridgeMode === 'replace' ? 'replace' : 'append';
+  //   "replace" = reserved for future use (DSH API does not yet support hiding other providers)
+  // Bridged models always keep the original name + [vision] suffix for clear identification.
 
   // Evidence cache for this provider (persists across requests)
   const evidenceCache = new Map();

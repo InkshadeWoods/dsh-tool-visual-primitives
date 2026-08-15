@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
     /* ── test-connection helper ─────────────────────────────── */
 
     async function testConnection(state, setStatus) {
-      setStatus({ kind: "loading", text: "正在测试连接…" });
+      setStatus({ kind: "loading", text: "Testing connection..." });
       const start = Date.now();
       try {
         const url =
@@ -85,12 +85,12 @@ window.__ModuleLoader__.load({
         const ms = Date.now() - start;
         setStatus({
           kind: "ok",
-          text: `✅ 连接正常 · 响应: "${reply}" · ${ms}ms`,
+          text: `✅ Connected · Reply: "${reply}" · ${ms}ms`,
         });
       } catch (err) {
         setStatus({
           kind: "error",
-          text: `❌ 连接失败: ${err.message}`,
+          text: `❌ Connection failed: ${err.message}`,
         });
       }
     }
@@ -147,7 +147,7 @@ window.__ModuleLoader__.load({
                     fontWeight: 600,
                     color: "var(--dsw-alias-label-primary, #e0e0e0)",
                   },
-                  children: ["👁️ 视觉分析"],
+                  children: ["Vision Analysis"],
                 }),
                 /* @__PURE__ */ reactJsxRuntime.jsx("button", {
                   onClick: onTest,
@@ -161,7 +161,7 @@ window.__ModuleLoader__.load({
                     cursor: testing ? "not-allowed" : "pointer",
                     fontSize: 13,
                   },
-                  children: testing ? "测试中..." : "测试连接",
+                  children: testing ? "Testing..." : "Test Connection",
                 }),
               ],
             }),
@@ -215,7 +215,7 @@ window.__ModuleLoader__.load({
                     marginBottom: 12,
                     color: "var(--dsw-alias-label-primary, #e0e0e0)",
                   },
-                  children: "🔑 API 配置",
+                  children: "API Config",
                 }),
                 field("API Key", "apiKey", state.apiKey, update, "sk-…", true),
                 field("Base URL", "baseUrl", state.baseUrl, update, "https://api.example.com/v1"),
@@ -240,7 +240,7 @@ window.__ModuleLoader__.load({
                     marginBottom: 12,
                     color: "var(--dsw-alias-label-primary, #e0e0e0)",
                   },
-                  children: "⚙️ 分析参数",
+                  children: "Analysis Params",
                 }),
                 selectField(
                   "Primitives Mode",
@@ -301,18 +301,46 @@ window.__ModuleLoader__.load({
                     marginBottom: 12,
                     color: "var(--dsw-alias-label-primary, #e0e0e0)",
                   },
-                  children: "🪟 桥接模式",
+                  children: "Bridge Mode",
                 }),
-                selectField(
-                  "模型显示方式",
-                  "bridgeMode",
-                  state.bridgeMode,
-                  update,
-                  [
-                    { value: "append", label: "显示原模型 + [vision]" },
-                    { value: "replace", label: "只显示 [vision] 版" },
-                  ]
-                ),
+                /* @__PURE__ */ reactJsxRuntime.jsx("label", {
+                  style: {
+                    display: "block",
+                    fontSize: 12,
+                    color: "var(--dsw-alias-label-secondary, #aaa)",
+                    marginBottom: 4,
+                  },
+                  children: "Model display",
+                }),
+                /* @__PURE__ */ reactJsxRuntime.jsx("select", {
+                  value: "append",
+                  disabled: true,
+                  style: {
+                    width: "100%",
+                    padding: "7px 10px",
+                    borderRadius: 6,
+                    border: "1px solid var(--dsw-alias-border-l2, #444)",
+                    background: "var(--dsw-alias-bg-layer-1, #252525)",
+                    color: "var(--dsw-alias-label-tertiary, #888)",
+                    fontSize: 13,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    cursor: "not-allowed",
+                  },
+                  children: /* @__PURE__ */ reactJsxRuntime.jsx("option", {
+                    value: "append",
+                    children: "Show originals + [vision]",
+                  }),
+                }),
+                /* @__PURE__ */ reactJsxRuntime.jsx("span", {
+                  style: {
+                    fontSize: 11,
+                    color: "var(--dsw-alias-label-tertiary, #888)",
+                    marginTop: 4,
+                    display: "block",
+                  },
+                  children: 'Replace mode (hide originals) reserved for future DSH.',
+                }),
               ],
             }),
 
@@ -325,7 +353,7 @@ window.__ModuleLoader__.load({
                 lineHeight: 1.6,
               },
               children:
-                "配置自动保存到本地存储。修改后下次使用 vision_analyze 工具时生效。",
+                "Settings auto-saved to local storage. Changes take effect on next use.",
             }),
           ],
         }
@@ -454,7 +482,7 @@ window.__ModuleLoader__.load({
           name: "settings.section",
           id: "tool-visual-primitives",
           order: 100,
-          label: () => "视觉分析",
+          label: () => "Vision Analysis",
           inject: () => ({}),
           component: VisionSettings,
         })
