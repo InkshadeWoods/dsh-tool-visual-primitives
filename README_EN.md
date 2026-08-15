@@ -4,7 +4,7 @@ A [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) plug
 
 The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives): normalized coordinates and referenceable objects turn image understanding into evidence that later reasoning can inspect and use.
 
-> The current release supports local source mounting from GitHub. After npm publication, use the one-command installer below.
+> The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
 ## Highlights
 
@@ -50,7 +50,7 @@ The vision provider and the enhanced text-model provider may be different.
 
 ### One-command npm install
 
-After publication on npm, run this in PowerShell or a terminal:
+Run this in PowerShell or a terminal:
 
 ```powershell
 npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
@@ -95,13 +95,13 @@ When the client UI changes for the first time, force-refresh the browser with `C
 
 ### Uninstall
 
-Remove both the `dsh-tool-visual-primitives` dependency and its `dsh.profile.bundles` entry from the Profile's `package.json`, then run this in the Profile directory:
+If you also want to remove the saved API key, select **Clear API Key** in the plugin settings first. Then run DSH's official uninstall command:
 
 ```powershell
-pnpm install
+npx @deepseek-ai/dsh plugin --profile web remove dsh-tool-visual-primitives
 ```
 
-Restart DSH. Credentials are managed by the DSH credential service; clear an API key from the plugin settings page when it is no longer needed.
+DSH removes the package dependency and automatically removes its bundle from `dsh.profile.bundles`. Restart DSH when it completes.
 
 ## First-Time Setup
 

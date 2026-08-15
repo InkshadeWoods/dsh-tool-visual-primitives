@@ -4,7 +4,7 @@
 
 核心思路参考 DeepSeek 的 [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)：以归一化坐标和可引用对象，将图像理解转化为后续推理可使用、可检查的证据。
 
-> 当前版本支持从 GitHub 源码本地挂载。npm 发布后可使用下方的一键安装命令。
+> 已发布至 npm。推荐使用下方的 DSH 官方一键安装命令；GitHub 源码挂载方式保留给开发与本地调试。
 
 ## 功能
 
@@ -50,7 +50,7 @@ detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
 
 ### npm 一键安装
 
-发布到 npm 后，在 PowerShell 或终端执行：
+在 PowerShell 或终端执行：
 
 ```powershell
 npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
@@ -95,13 +95,13 @@ npx @deepseek-ai/dsh web
 
 ### 卸载
 
-从 Profile 的 `package.json` 中移除 `dsh-tool-visual-primitives` 依赖及 `dsh.profile.bundles` 中对应条目，在 Profile 目录执行：
+如需清除已保存的 API Key，请先在插件设置页点击“清除 API Key”。然后执行 DSH 官方卸载命令：
 
 ```powershell
-pnpm install
+npx @deepseek-ai/dsh plugin --profile web remove dsh-tool-visual-primitives
 ```
 
-重启 DSH 即可。密钥由 DSH 凭据服务管理；如不再需要，请在插件设置页点击“清除 API Key”。
+DSH 会移除包依赖，并自动从 `dsh.profile.bundles` 清除对应 bundle。完成后重启 DSH。
 
 ## 首次配置
 
