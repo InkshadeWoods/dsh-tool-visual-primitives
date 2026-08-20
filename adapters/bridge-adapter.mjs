@@ -29,23 +29,37 @@ function collectImageAttachments(blocks, collected = []) {
   return collected;
 }
 
+function collectDirectImageAttachments(blocks) {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.flatMap((block) => block?.type === "image" && block.attachment?.attachmentId ? [block.attachment] : []);
+}
+
 function isExplicitImageReference(prompt) {
-  return /(这张图|这幅图|这个图|上图|截图|图片|图中|刚才那张)/i.test(prompt);
+  return /(?:这|那|上|前|刚才|刚刚).{0,4}(?:张|幅)?(?:图片|图|截图)|(?:图|图片|截图).{0,2}(?:中|里|上|内)|(?:看|分析|解释|描述|识别|比较|统计).{0,6}(?:图|图片|截图)|\b(?:this|that|the|previous|above)\s+(?:image|picture|screenshot)\b|\b(?:image|picture|screenshot)\s+(?:above|before)\b/i.test(prompt);
 }
 
 function findLatestUserMessage(messages) {
-  return [...messages].reverse().find((message) => message?.role === "user") ?? null;
+  return [...messages].reverse().find((message) => message?.role === "user" && (message.source?.kind === "user" || !message.source)) ?? null;
 }
 
-function indexHistoricalImages(messages, cache) {
+function indexHistoricalImages(messages, cache, currentMessageId) {
   for (const message of messages) {
+    if (message?.id === currentMessageId) continue;
     for (const attachment of collectImageAttachments(message?.content)) cache.registerImage(attachment);
   }
 }
 
 function selectTargetAttachments(currentMessage, prompt, cache) {
-  const currentAttachments = collectImageAttachments(currentMessage?.content);
-  if (currentAttachments.length > 0) return currentAttachments;
+  const currentAttachments = collectDirectImageAttachments(currentMessage?.content);
+  if (currentAttachments.length > 0) {
+    const hasNewAttachment = currentAttachments.some((attachment) => !cache.hasImage(attachment.attachmentId));
+    for (const attachment of currentAttachments) cache.registerImage(attachment);
+    // Some hosts retain historical attachments in later requests.  A repeated
+    // attachment alone is not a new image turn; require an explicit reference
+    // before spending another vision-model request on it.
+    if (hasNewAttachment || isExplicitImageReference(prompt)) return currentAttachments;
+    return [];
+  }
   if (!isExplicitImageReference(prompt)) return [];
   const latest = cache.getLatestImage();
   return latest ? [latest] : [];
@@ -87,21 +101,30 @@ async function resolveVisualEvidence(ctx, attachments, prompt, signal, config, c
 
 function convertContentForTextModel(blocks, selectedEvidence, cache) {
   if (!Array.isArray(blocks)) return blocks;
-  return blocks.map((block) => {
+  return blocks.flatMap((block) => {
     if (block?.type === "image") {
       const attachmentId = block.attachment?.attachmentId;
       const evidence = attachmentId ? selectedEvidence.get(attachmentId) || cache.getLatestEvidence(attachmentId) : null;
-      return {
+      return [{
         type: "text",
         text: evidence
           ? formatEvidenceForModel(evidence)
           : "[历史图片附件未用于当前问题，未提供视觉证据。]",
-      };
+      }];
     }
     if (block?.type === "tool-result") {
-      return { ...block, content: convertContentForTextModel(block.content, selectedEvidence, cache) };
+      return [{ ...block, content: convertContentForTextModel(block.content, selectedEvidence, cache) }];
     }
-    return block;
+    if (block?.type === "text" || block?.type === "reasoning" || block?.type === "tool-call") return [block];
+
+    // A provider or plugin may surface an extension block that the selected
+    // text-model adapter cannot serialize.  Never forward it as `unknown`:
+    // OpenAI-compatible services reject the entire request in that case.
+    console.warn("[tool-visual-primitives]", JSON.stringify({
+      outcome: "dropped_unsupported_content_block",
+      blockType: typeof block?.type === "string" ? block.type : "missing",
+    }));
+    return [];
   });
 }
 
@@ -113,8 +136,8 @@ function convertMessagesForTextModel(messages, selectedEvidence, cache) {
 }
 
 async function buildBridgeMessages(ctx, messages, signal, config, cache) {
-  indexHistoricalImages(messages, cache);
   const currentMessage = findLatestUserMessage(messages);
+  indexHistoricalImages(messages, cache, currentMessage?.id);
   const prompt = textFromContent(currentMessage?.content) || DEFAULT_IMAGE_PROMPT;
   const attachments = selectTargetAttachments(currentMessage, prompt, cache);
   const selectedEvidence = new Map();

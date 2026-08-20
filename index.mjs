@@ -14,6 +14,19 @@ export const DEFAULT_CONFIG = {
 
 const TEST_ROUTE_PATH = "/visual-primitives/api/test-connection";
 const MODEL_CATALOG_ROUTE_PATH = "/visual-primitives/api/models";
+const SETTINGS_ROUTE_PATH = "/visual-primitives/api/settings";
+
+const CLIENT_SETTINGS = [
+  ["baseUrl", "baseUrlEnv"],
+  ["model", "modelEnv"],
+  ["primitives", "primitivesEnv"],
+  ["detail", "detailEnv"],
+  ["retry", "retryEnv"],
+  ["maxImageBytes", "maxImageBytesEnv"],
+  ["timeoutMs", "timeoutMsEnv"],
+  ["maxTokens", "maxTokensEnv"],
+  ["enabledModels", "enabledModelsEnv"],
+];
 
 function writeJson(res, status, body) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -22,10 +35,12 @@ function writeJson(res, status, body) {
 
 function isSameOriginRequest(req) {
   const origin = req.headers.origin;
+  const referer = req.headers.referer;
   const host = req.headers.host;
-  if (typeof origin !== "string" || typeof host !== "string") return false;
+  const source = typeof origin === "string" ? origin : referer;
+  if (typeof source !== "string" || typeof host !== "string") return false;
   try {
-    return new URL(origin).host === host;
+    return new URL(source).host === host;
   } catch {
     return false;
   }
@@ -128,6 +143,44 @@ function registerModelCatalogRoute(ctx, config) {
   });
 }
 
+// The settings client must show the same values consumed by the runtime.  This
+// endpoint resolves values in the credential store, but deliberately only
+// returns non-secret settings and a boolean for the API key.
+function registerSettingsRoute(ctx, config) {
+  return ctx.webServer.register({
+    kind: "exact",
+    path: SETTINGS_ROUTE_PATH,
+    handler: async (req, res) => {
+      if (req.method !== "GET") {
+        writeJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!isSameOriginRequest(req)) {
+        writeJson(res, 403, { ok: false, error: "forbidden" });
+        return;
+      }
+      try {
+        const cfg = { ...DEFAULT_ANALYSIS_CONFIG, ...(config || {}) };
+        const entries = [...CLIENT_SETTINGS, ["apiKey", "apiKeyEnv"]];
+        const values = await Promise.all(entries.map(([, envKey]) => resolveCredential(ctx, cfg[envKey])));
+        const settings = Object.fromEntries(
+          CLIENT_SETTINGS.map(([key], index) => [key, values[index] ?? null]),
+        );
+        writeJson(res, 200, {
+          ok: true,
+          settings,
+          apiKeyConfigured: Boolean(values[values.length - 1]),
+        });
+      } catch (error) {
+        writeJson(res, 500, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  });
+}
+
 export function apply(ctx, config) {
   const cfg = { ...DEFAULT_CONFIG, ...(config || {}) };
   registerVisionTool(ctx, cfg);
@@ -138,6 +191,7 @@ export function apply(ctx, config) {
       const routeDisposers = [
         registerConnectionTestRoute(webCtx, cfg),
         registerModelCatalogRoute(webCtx, cfg),
+        registerSettingsRoute(webCtx, cfg),
       ].filter((disposer) => typeof disposer === "function");
       return () => {
         for (const dispose of routeDisposers) dispose();

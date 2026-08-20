@@ -38,6 +38,17 @@ function classifyParentAbort(reason) {
   return /(cancel|stop|用户|取消)/i.test(text) ? "VISION_USER_CANCELLED" : "VISION_PARENT_ABORTED";
 }
 
+function includesImageContent(messages) {
+  return Array.isArray(messages) && messages.some((message) => Array.isArray(message?.content)
+    && message.content.some((item) => item?.type === "image_url"));
+}
+
+function isImageProtocolMismatch(status, responseBody, messages) {
+  if (status !== 400 || !includesImageContent(messages)) return false;
+  const text = String(responseBody || "");
+  return /(?:type["']?\s*[:=]\s*["']?unknown|input_value=.*["']unknown["']|unexpected item type in content|(?:image_url|input_image).*(?:invalid|unsupported|unexpected)|(?:invalid|unsupported|unexpected).*(?:image_url|input_image))/is.test(text);
+}
+
 export async function requestVisionCompletion({ baseURL, apiKey, model, messages, maxTokens = DEFAULT_MAX_TOKENS, timeoutMs = 60000, signal }) {
   const mimo = isMimo(baseURL);
   const url = baseURL.replace(/\/?$/, "/") + "chat/completions";
@@ -52,6 +63,13 @@ export async function requestVisionCompletion({ baseURL, apiKey, model, messages
     });
     const data = await response.text();
     if (!response.ok) {
+      if (isImageProtocolMismatch(response.status, data, messages)) {
+        throw new VisionRequestError(
+          "VISION_IMAGE_PROTOCOL_MISMATCH",
+          "视觉模型接口协议不兼容图片内容。请更换支持图片输入的模型，或检查模型接口协议设置。",
+          { elapsedMs: Date.now() - startedAt, httpStatus: response.status },
+        );
+      }
       throw new VisionRequestError("VISION_API_HTTP_ERROR", `vision API request failed with status ${response.status}`, {
         elapsedMs: Date.now() - startedAt,
         httpStatus: response.status,

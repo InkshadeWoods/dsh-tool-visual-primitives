@@ -74,14 +74,15 @@ function createSessionEvidenceCache(evidenceLimit) {
   const images = new Map();
   const evidences = new Map();
   return {
+    hasImage(attachmentId) {
+      return images.has(normalizeAttachmentId(attachmentId));
+    },
     registerImage(attachment) {
       const attachmentId = normalizeAttachmentId(attachment?.attachmentId);
       if (!attachmentId) return null;
       const image = {
+        ...attachment,
         attachmentId,
-        mediaType: attachment.mediaType,
-        name: attachment.name,
-        imageId: attachment.imageId,
         latestSeenAt: Date.now(),
       };
       images.set(attachmentId, image);
