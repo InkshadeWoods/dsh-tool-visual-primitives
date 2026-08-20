@@ -1,6 +1,6 @@
 {
   "name": "dsh-tool-visual-primitives",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "DSH 视觉原语工具：参考 DeepSeek《Thinking with Visual Primitives》论文，将图片路由到外部视觉模型并返回带视觉基元的文本分析。纯文本循环，对话模型无需原生视觉能力即可'看见'图片。",
   "type": "module",
   "main": "./index.mjs",

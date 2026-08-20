@@ -6,6 +6,13 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.2.0
+
+- Reworked the settings hierarchy and connection flow: completed connections collapse by default, with full editing and **Save & Test Connection** available when expanded.
+- Improved vision-model selection, model discovery, custom model IDs, connection status, and error feedback.
+- Optimized multi-turn image conversations: text-only follow-ups no longer repeat vision requests, while explicit references to earlier images can reuse cached visual evidence.
+- Added a clear, provider-neutral error message for image-content protocol incompatibility.
+
 ## Highlights
 
 - Two entry points backed by one `vision_analyze` core: an explicit tool and `[vision]` chat-model variants.
