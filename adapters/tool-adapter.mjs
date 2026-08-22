@@ -1,4 +1,4 @@
-import { analyzeVision } from "../vision/analysis-core.mjs";
+import { analyzeVision, refreshDiagnosticSwitch } from "../vision/analysis-core.mjs";
 import { createEvidenceCache } from "../vision/evidence-cache.mjs";
 
 function parseToolInput(args) {
@@ -33,6 +33,7 @@ export function registerVisionTool(ctx, config) {
     timeoutMs: config.timeoutMs,
     isConcurrencySafe: () => false,
     async execute(args, exec) {
+      await refreshDiagnosticSwitch(ctx, config);
       const request = parseToolInput(args);
       const evidence = await analyzeVision(ctx, { ...request, signal: exec.signal }, config, evidenceCache);
       return { text: evidence.text };

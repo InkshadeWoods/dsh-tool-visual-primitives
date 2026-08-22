@@ -28,3 +28,6 @@ Thumbs.db
 !.env.example
 *.pem
 *.key
+
+# Local security-scan artifacts
+.mimosa/

@@ -57,10 +57,10 @@ detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
 
 ### npm 一键安装
 
-在 PowerShell 或终端执行：
+在 PowerShell 或终端执行（以下 `dsh` 命令以已全局安装 DSH 为前提，即 `npm install -g @deepseek-ai/dsh`；未全局安装时，可将 `dsh` 替换为 `npx @deepseek-ai/dsh`）：
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
+dsh plugin --profile web add dsh-tool-visual-primitives@latest
 ```
 
 该命令调用 DSH 官方插件管理器，在 `web` Profile 中执行包安装。安装成功后，DSH 会识别本插件包内的 `dsh.bundle.patch` 声明，自动将插件加入 `dsh.profile.bundles`，并在启动时应用包内的 `cordis.patch.yml`。
@@ -70,7 +70,7 @@ npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
 如使用的不是 `web` Profile，请将 `--profile` 改为对应的 Profile 名称：
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile <你的 Profile 名称> add dsh-tool-visual-primitives@latest
+dsh plugin --profile <你的 Profile 名称> add dsh-tool-visual-primitives@latest
 ```
 
 安装后完整重启 DSH，并在“设置 → 视觉分析”中填写 API Key、Base URL 和视觉模型。
@@ -87,7 +87,7 @@ Set-Location $source
 pnpm install
 pnpm run build
 
-npx @deepseek-ai/dsh plugin --profile web add $source
+dsh plugin --profile web add $source
 ```
 
 DSH 官方 CLI 会自动将本地包加入 Profile 依赖，并基于包内的 `dsh.bundle.patch` 声明维护 `dsh.profile.bundles`；无需手动编辑 Profile 的 `package.json` 或 `cordis.patch.yml`。
@@ -95,7 +95,7 @@ DSH 官方 CLI 会自动将本地包加入 Profile 依赖，并基于包内的 `
 完整重启 DSH：
 
 ```powershell
-npx @deepseek-ai/dsh web
+dsh web
 ```
 
 首次更新客户端界面时，请在浏览器按 `Ctrl+Shift+R` 强制刷新。
@@ -105,7 +105,7 @@ npx @deepseek-ai/dsh web
 如需清除已保存的 API Key，请先在插件设置页点击“清除 API Key”。然后执行 DSH 官方卸载命令：
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile web remove dsh-tool-visual-primitives
+dsh plugin --profile web remove dsh-tool-visual-primitives
 ```
 
 DSH 会移除包依赖，并自动从 `dsh.profile.bundles` 清除对应 bundle。完成后重启 DSH。
@@ -246,6 +246,17 @@ pnpm run build
 
 - 服务端入口为 `index.mjs`；修改后需要重启 DSH。
 - 修改客户端界面后，需要重新执行构建，并在浏览器中强制刷新页面。
+
+## 更新日志
+
+### 1.3.0
+
+- 兼容新版 DSH 宿主（0.1.1-rc.8 及以上）的适配器接口
+- 会话辅助调用（标题生成、上下文压缩）不再触发重复的视觉分析，降低配额消耗与偶发失败
+- 相同图片与提示词的并发分析自动合并为一次上游请求
+- 新增“诊断日志”设置项（默认关闭），可输出插件运行日志便于排查
+- 连接测试改进：使用真实 token 预算，失败时错误信息包含上游返回摘要
+- 安装命令更新为 `dsh` 直令形式（需已全局安装 DSH）
 
 ## 许可证
 

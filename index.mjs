@@ -25,6 +25,7 @@ const CLIENT_SETTINGS = [
   ["maxImageBytes", "maxImageBytesEnv"],
   ["timeoutMs", "timeoutMsEnv"],
   ["maxTokens", "maxTokensEnv"],
+  ["logDiagnostics", "logDiagnosticsEnv"],
   ["enabledModels", "enabledModelsEnv"],
 ];
 
@@ -64,8 +65,12 @@ function registerConnectionTestRoute(ctx, config) {
         const runtime = await resolveRuntimeConfig(ctx, config);
         await requestVisionCompletion({
           ...runtime,
-          messages: [{ role: "user", content: "Say OK" }],
-          maxTokens: 4,
+          // Industry-standard probe: a tiny plain-text ping over
+          // /chat/completions with the real analysis token budget — a tiny
+          // max_tokens cap starves reasoning-style providers into empty
+          // responses. Provider-pool quirks beyond this shape are upstream
+          // issues; real conversations remain the final check.
+          messages: [{ role: "user", content: [{ type: "text", text: "Say OK" }] }],
           timeoutMs: Math.min(runtime.timeoutMs, 30_000),
         });
         writeJson(res, 200, { ok: true, elapsedMs: Date.now() - startedAt });

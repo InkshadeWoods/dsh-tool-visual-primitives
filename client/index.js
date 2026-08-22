@@ -43,11 +43,12 @@ window.__ModuleLoader__.load({
       timeoutMs: 180000,
       maxTokensMode: "auto",
       maxTokens: 2048,
+      logDiagnostics: "off",
       enabledModels: [],
     };
 
     const PERSISTED_KEYS = Object.keys(FALLBACKS).filter((key) => key !== "apiKey");
-    const ANALYSIS_SETTING_KEYS = ["primitives", "detail", "retry", "maxImageBytes", "timeoutMs", "maxTokensMode", "maxTokens"];
+    const ANALYSIS_SETTING_KEYS = ["primitives", "detail", "retry", "maxImageBytes", "timeoutMs", "maxTokensMode", "maxTokens", "logDiagnostics"];
     let credentialSyncQueue = Promise.resolve();
 
     /* ── recovery draft (localStorage) ──────────────────────── */
@@ -121,6 +122,7 @@ window.__ModuleLoader__.load({
       if (state.maxImageBytes !== FALLBACKS.maxImageBytes) changes.push(`图片：${Math.round(state.maxImageBytes / BYTES_PER_MEGABYTE)} MB`);
       if (state.timeoutMs !== FALLBACKS.timeoutMs) changes.push(`超时：${Math.round(state.timeoutMs / 1000)} 秒`);
       if (state.maxTokensMode !== FALLBACKS.maxTokensMode || state.maxTokens !== FALLBACKS.maxTokens) changes.push(`Token：${state.maxTokensMode === "auto" ? "自动" : state.maxTokens}`);
+      if (state.logDiagnostics !== FALLBACKS.logDiagnostics) changes.push(`诊断日志：${state.logDiagnostics === "on" ? "开启" : "关闭"}`);
       return changes;
     }
 
@@ -167,6 +169,7 @@ window.__ModuleLoader__.load({
         primitives: normalizeOption(persisted.primitives, FALLBACKS.primitives, ["auto", "on", "off"]),
         detail: normalizeOption(persisted.detail, FALLBACKS.detail, ["brief", "standard", "verbose"]),
         retry: normalizeOption(persisted.retry, FALLBACKS.retry, ["off", "on", "format-only"]),
+        logDiagnostics: normalizeOption(persisted.logDiagnostics, FALLBACKS.logDiagnostics, ["off", "on"]),
         enabledModels: normalizeEnabledModels(persisted.enabledModels),
         maxImageBytes: normalizeNumber(persisted.maxImageBytes, FALLBACKS.maxImageBytes),
         timeoutMs: normalizeNumber(persisted.timeoutMs, FALLBACKS.timeoutMs),
@@ -238,6 +241,7 @@ window.__ModuleLoader__.load({
         ["VISION_MAX_IMAGE_BYTES", state.maxImageBytes, "maxImageBytes"],
         ["VISION_TIMEOUT_MS", state.timeoutMs, "timeoutMs"],
         ["VISION_MAX_TOKENS", state.maxTokensMode === "auto" ? "auto" : state.maxTokens, "maxTokens"],
+        ["VISION_LOG_DIAGNOSTICS", state.logDiagnostics, "logDiagnostics"],
         ["VISION_ENABLED_MODELS", JSON.stringify(state.enabledModels), "enabledModels"],
       ];
       for (const [ref, value, key] of entries) {
@@ -1124,6 +1128,21 @@ window.__ModuleLoader__.load({
                     "format-only": "仅格式：为坐标化工作流补一次请求。",
                     on: "开启：优先保证结构完整，可能增加耗时与费用。",
                   }[state.retry]
+                ),
+                selectField(
+                  "诊断日志",
+                  "logDiagnostics",
+                  state.logDiagnostics,
+                  update,
+                  [
+                    { value: "off", label: "关闭（默认）" },
+                    { value: "on", label: "开启" },
+                  ],
+                  "开启后在 DSH 后台控制台输出插件的运行日志（请求、缓存、错误明细）。",
+                  {
+                    off: "关闭：控制台不输出插件运行日志。",
+                    on: "开启：输出 bridge_stream / analysis_start / success / error 等诊断日志。",
+                  }[state.logDiagnostics]
                 ),
                 /* @__PURE__ */ reactJsxRuntime.jsx(NumberField, {
                   id: "vision-max-image-bytes",
@@ -2189,7 +2208,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.apply = apply;
-    exports.inject = ["slots"];
+    exports.inject = ["slots", "connection"];
     return module.exports;
   },
 });

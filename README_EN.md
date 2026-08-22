@@ -57,10 +57,10 @@ The vision provider and the enhanced text-model provider may be different.
 
 ### One-command npm install
 
-Run this in PowerShell or a terminal:
+Run this in PowerShell or a terminal (the `dsh` command below assumes DSH is installed globally via `npm install -g @deepseek-ai/dsh`; without a global install, replace `dsh` with `npx @deepseek-ai/dsh`):
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile web add dsh-tool-visual-primitives@latest
+dsh plugin --profile web add dsh-tool-visual-primitives@latest
 ```
 
 The command invokes DSH's official plugin manager and installs the package into the `web` Profile. After installation, DSH detects this package's `dsh.bundle.patch` declaration, adds the plugin to `dsh.profile.bundles`, and applies the package's own `cordis.patch.yml` during boot.
@@ -70,7 +70,7 @@ It is safe to run repeatedly: it does not duplicate the bundle and does not dire
 If you use a Profile other than `web`, replace `--profile` with that Profile name:
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile <your-profile-name> add dsh-tool-visual-primitives@latest
+dsh plugin --profile <your-profile-name> add dsh-tool-visual-primitives@latest
 ```
 
 Restart DSH completely after installation, then configure API Key, Base URL, and the vision model under **Settings → Visual Analysis**.
@@ -87,7 +87,7 @@ Set-Location $source
 pnpm install
 pnpm run build
 
-npx @deepseek-ai/dsh plugin --profile web add $source
+dsh plugin --profile web add $source
 ```
 
 The official DSH CLI adds the local package to the Profile dependencies and maintains `dsh.profile.bundles` from the package's `dsh.bundle.patch` declaration. No manual edit of the Profile's `package.json` or `cordis.patch.yml` is needed.
@@ -95,7 +95,7 @@ The official DSH CLI adds the local package to the Profile dependencies and main
 Restart DSH completely:
 
 ```powershell
-npx @deepseek-ai/dsh web
+dsh web
 ```
 
 When the client UI changes for the first time, force-refresh the browser with `Ctrl+Shift+R`.
@@ -105,7 +105,7 @@ When the client UI changes for the first time, force-refresh the browser with `C
 If you also want to remove the saved API key, select **Clear API Key** in the plugin settings first. Then run DSH's official uninstall command:
 
 ```powershell
-npx @deepseek-ai/dsh plugin --profile web remove dsh-tool-visual-primitives
+dsh plugin --profile web remove dsh-tool-visual-primitives
 ```
 
 DSH removes the package dependency and automatically removes its bundle from `dsh.profile.bundles`. Restart DSH when it completes.
@@ -246,6 +246,17 @@ pnpm run build
 
 - The server entry is `index.mjs`; restart DSH after changing it.
 - After changing the client UI, rebuild the package and force-refresh the browser page.
+
+## Changelog
+
+### 1.3.0
+
+- Compatible with the new DSH host adapter interface (0.1.1-rc.8 and above)
+- Auxiliary session calls (title generation, context compaction) no longer trigger duplicate visual analyses, reducing quota usage and occasional failures
+- Concurrent analyses of the same image and prompt are merged into a single upstream request
+- New "Diagnostics log" setting (off by default) to output plugin runtime logs for troubleshooting
+- Connection test improvements: uses the real token budget, and failures include an upstream response summary in the error message
+- Install commands updated to the direct `dsh` form (requires DSH installed globally)
 
 ## License
 

@@ -49,6 +49,22 @@ function isImageProtocolMismatch(status, responseBody, messages) {
   return /(?:type["']?\s*[:=]\s*["']?unknown|input_value=.*["']unknown["']|unexpected item type in content|(?:image_url|input_image).*(?:invalid|unsupported|unexpected)|(?:invalid|unsupported|unexpected).*(?:image_url|input_image))/is.test(text);
 }
 
+// Gateways pack their upstream-failure detail into the error body (OpenAI
+// error.message JSON, or plain-text provider summaries).  Surface a bounded
+// excerpt so callers see which upstream failed without digging gateway logs.
+function responseExcerpt(body) {
+  const raw = String(body || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    const message = parsed?.error?.message ?? parsed?.message;
+    if (typeof message === "string" && message.trim()) return message.trim().slice(0, 300);
+  } catch {
+    // Plain-text gateway bodies fall through to the raw excerpt below.
+  }
+  return raw.replace(/\s+/g, " ").slice(0, 300);
+}
+
 export async function requestVisionCompletion({ baseURL, apiKey, model, messages, maxTokens = DEFAULT_MAX_TOKENS, timeoutMs = 60000, signal }) {
   const mimo = isMimo(baseURL);
   const url = baseURL.replace(/\/?$/, "/") + "chat/completions";
@@ -70,10 +86,16 @@ export async function requestVisionCompletion({ baseURL, apiKey, model, messages
           { elapsedMs: Date.now() - startedAt, httpStatus: response.status },
         );
       }
-      throw new VisionRequestError("VISION_API_HTTP_ERROR", `vision API request failed with status ${response.status}`, {
-        elapsedMs: Date.now() - startedAt,
-        httpStatus: response.status,
-      });
+      const excerpt = responseExcerpt(data);
+      throw new VisionRequestError(
+        "VISION_API_HTTP_ERROR",
+        `vision API request failed with status ${response.status}${excerpt ? `: ${excerpt}` : ""}`,
+        {
+          elapsedMs: Date.now() - startedAt,
+          httpStatus: response.status,
+          ...(excerpt ? { responseExcerpt: excerpt } : {}),
+        },
+      );
     }
     return extractResponseContent(data);
   } catch (error) {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createVisualEvidence, isEvidenceValid } from "./evidence.mjs";
 import { buildEvidenceCacheKey } from "./evidence-cache.mjs";
 import { loadImageSource } from "./image-source.mjs";
@@ -22,6 +23,7 @@ export const DEFAULT_ANALYSIS_CONFIG = {
   maxImageBytesEnv: "VISION_MAX_IMAGE_BYTES",
   timeoutMsEnv: "VISION_TIMEOUT_MS",
   maxTokensEnv: "VISION_MAX_TOKENS",
+  logDiagnosticsEnv: "VISION_LOG_DIAGNOSTICS",
   enabledModelsEnv: "VISION_ENABLED_MODELS",
   primitives: "auto",
   detail: "standard",
@@ -52,7 +54,21 @@ function createRequestId() {
   return `vision-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function reportDiagnostic(event) {
+// Same-key analyses in flight at the same moment share one upstream request.
+const inflightAnalyses = new Map();
+
+// All runtime logs honour the VISION_LOG_DIAGNOSTICS credential ("on" only);
+// startup failures (adapter registration errors) stay unconditional.
+export const diagnosticState = { enabled: false };
+
+export async function refreshDiagnosticSwitch(ctx, config) {
+  const ref = config?.logDiagnosticsEnv || DEFAULT_ANALYSIS_CONFIG.logDiagnosticsEnv;
+  const value = await resolveCredential(ctx, ref);
+  diagnosticState.enabled = String(value ?? "").trim().toLowerCase() === "on";
+}
+
+export function reportDiagnostic(event) {
+  if (!diagnosticState.enabled) return;
   console.info("[tool-visual-primitives]", JSON.stringify(event));
 }
 
@@ -143,6 +159,12 @@ export async function analyzeVision(ctx, request, config, cache) {
   const startedAt = Date.now();
   const runtime = request.runtime || await resolveRuntimeConfig(ctx, config);
   const prompt = String(request.prompt || "请详细描述这张图片的内容。").trim();
+  reportDiagnostic({
+    requestId,
+    outcome: "analysis_start",
+    promptHash: createHash("sha256").update(prompt).digest("hex").slice(0, 8),
+    promptLength: prompt.length,
+  });
   const mode = detectVisionMode(prompt);
   const detail = runtime.detail;
   const usesPrimitives = shouldUsePrimitives(mode, runtime.primitives, detail);
@@ -183,7 +205,16 @@ export async function analyzeVision(ctx, request, config, cache) {
   const cacheKey = buildEvidenceCacheKey({ imageId, mode, detail, usesPrimitives, prompt, runtimeScope });
   const cached = cache?.get(cacheKey);
   if (cached) return cached;
+  // Concurrent callers that miss the cache together must share one upstream
+  // request: duplicate vision calls overload slow upstreams, and one failing
+  // copy poisons the whole turn.
+  const inflight = inflightAnalyses.get(cacheKey);
+  if (inflight) {
+    reportDiagnostic({ requestId, outcome: "inflight_dedup", mode, detail, imageCount: sources.length });
+    return inflight;
+  }
 
+  const analysis = (async function runAnalysis() {
   const messages = [{
     role: "user",
     content: [
@@ -209,6 +240,7 @@ export async function analyzeVision(ctx, request, config, cache) {
       totalMs: Date.now() - startedAt,
       abortSource: error?.details?.abortSource,
       httpStatus: error?.details?.httpStatus,
+      ...(error?.details?.responseExcerpt ? { responseExcerpt: error.details.responseExcerpt } : {}),
     });
     throw error;
   }
@@ -239,4 +271,11 @@ export async function analyzeVision(ctx, request, config, cache) {
     totalMs: Date.now() - startedAt,
   });
   return evidence;
+  })();
+  inflightAnalyses.set(cacheKey, analysis);
+  try {
+    return await analysis;
+  } finally {
+    inflightAnalyses.delete(cacheKey);
+  }
 }

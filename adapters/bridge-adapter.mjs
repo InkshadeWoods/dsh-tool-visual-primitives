@@ -1,5 +1,5 @@
-import { analyzeVision, getRuntimeScope, resolveCredential, resolveRuntimeConfig } from "../vision/analysis-core.mjs";
-import { createSessionEvidenceCaches, deriveCoverageRequirements } from "../vision/evidence-cache.mjs";
+import { analyzeVision, getRuntimeScope, refreshDiagnosticSwitch, reportDiagnostic, resolveCredential, resolveRuntimeConfig } from "../vision/analysis-core.mjs";
+import { createEvidenceCache, createSessionEvidenceCaches, deriveCoverageRequirements } from "../vision/evidence-cache.mjs";
 import { formatEvidenceForModel } from "../vision/evidence.mjs";
 import { detectVisionMode, shouldUsePrimitives } from "../vision/mode-policy.mjs";
 
@@ -50,6 +50,9 @@ function indexHistoricalImages(messages, cache, currentMessageId) {
 }
 
 function selectTargetAttachments(currentMessage, prompt, cache) {
+  // With no current user message the prompt is our own fallback wording, not
+  // a user's reference, so never spend a vision request from here.
+  if (!currentMessage) return [];
   const currentAttachments = collectDirectImageAttachments(currentMessage?.content);
   if (currentAttachments.length > 0) {
     const hasNewAttachment = currentAttachments.some((attachment) => !cache.hasImage(attachment.attachmentId));
@@ -65,7 +68,7 @@ function selectTargetAttachments(currentMessage, prompt, cache) {
   return latest ? [latest] : [];
 }
 
-async function resolveVisualEvidence(ctx, attachments, prompt, signal, config, cache) {
+async function resolveVisualEvidence(ctx, attachments, prompt, signal, config, cache, promptCache) {
   if (attachments.length === 0) return null;
   const runtime = await resolveRuntimeConfig(ctx, config);
   const mode = detectVisionMode(prompt);
@@ -79,13 +82,13 @@ async function resolveVisualEvidence(ctx, attachments, prompt, signal, config, c
     runtimeScope: getRuntimeScope(runtime),
   });
   if (reusable) {
-    console.info("[tool-visual-primitives]", JSON.stringify({
+    reportDiagnostic({
       outcome: "cache_hit",
       cacheHit: true,
       imageCount: attachmentIds.length,
       mode,
       detail: runtime.detail,
-    }));
+    });
     return reusable;
   }
 
@@ -94,7 +97,7 @@ async function resolveVisualEvidence(ctx, attachments, prompt, signal, config, c
     prompt,
     signal,
     runtime,
-  }, config);
+  }, config, promptCache);
   cache.setEvidence(attachmentIds, evidence);
   return evidence;
 }
@@ -120,10 +123,10 @@ function convertContentForTextModel(blocks, selectedEvidence, cache) {
     // A provider or plugin may surface an extension block that the selected
     // text-model adapter cannot serialize.  Never forward it as `unknown`:
     // OpenAI-compatible services reject the entire request in that case.
-    console.warn("[tool-visual-primitives]", JSON.stringify({
+    reportDiagnostic({
       outcome: "dropped_unsupported_content_block",
       blockType: typeof block?.type === "string" ? block.type : "missing",
-    }));
+    });
     return [];
   });
 }
@@ -135,7 +138,7 @@ function convertMessagesForTextModel(messages, selectedEvidence, cache) {
   }));
 }
 
-async function buildBridgeMessages(ctx, messages, signal, config, cache) {
+async function buildBridgeMessages(ctx, messages, signal, config, cache, promptCache) {
   const currentMessage = findLatestUserMessage(messages);
   indexHistoricalImages(messages, cache, currentMessage?.id);
   const prompt = textFromContent(currentMessage?.content) || DEFAULT_IMAGE_PROMPT;
@@ -143,7 +146,7 @@ async function buildBridgeMessages(ctx, messages, signal, config, cache) {
   const selectedEvidence = new Map();
   if (attachments.length > 0) {
     try {
-      const evidence = await resolveVisualEvidence(ctx, attachments, prompt, signal, config, cache);
+      const evidence = await resolveVisualEvidence(ctx, attachments, prompt, signal, config, cache, promptCache);
       for (const attachment of attachments) selectedEvidence.set(attachment.attachmentId, evidence);
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown visual error";
@@ -206,6 +209,32 @@ function createBridgedModel(route, model) {
 
 export function registerVisionBridge(ctx, config) {
   const evidenceCaches = createSessionEvidenceCaches();
+  const promptCache = createEvidenceCache();
+  const streamWithVisualEvidence = (options) => (async function* bridgedStream() {
+    await refreshDiagnosticSwitch(ctx, config);
+    reportDiagnostic({
+      outcome: "bridge_stream",
+      sessionId: options.sessionId ?? null,
+      model: options.model,
+      purpose: options.purpose ?? null,
+    });
+    const route = parseBridgeModelId(options.model);
+    const enabledRoutes = await getEnabledRoutes(ctx, config);
+    if (!enabledRoutes.some((entry) => entry.provider === route.provider && entry.model === route.model)) {
+      throw new Error("visual bridge model is not enabled");
+    }
+    const cache = evidenceCaches.get(options.sessionId);
+    // Auxiliary calls (session titles, compaction) replay session content for
+    // their own bookkeeping; they must not mint new visual evidence.  Their
+    // image blocks fall back to evidence already produced by the main turn.
+    if (options.purpose) {
+      const replayed = convertMessagesForTextModel(options.messages, new Map(), cache);
+      yield* ctx.llm.stream({ ...options, provider: route.provider, model: route.model, messages: replayed });
+      return;
+    }
+    const messages = await buildBridgeMessages(ctx, options.messages, options.signal, config, cache, promptCache);
+    yield* ctx.llm.stream({ ...options, provider: route.provider, model: route.model, messages });
+  })();
   try {
     return ctx.llm.registerAdapter([BRIDGE_PROVIDER_ID], {
       providerInfo: () => ({ id: BRIDGE_PROVIDER_ID, name: BRIDGE_PROVIDER_NAME }),
@@ -240,17 +269,18 @@ export function registerVisionBridge(ctx, config) {
           inputModalities: ["text", "image"],
         };
       },
+      // Pre-rc.8 hosts dispatch adapter.stream directly; rc.8+ hosts only use
+      // the one-generation stream returned by prepareCall.
       stream(options) {
-        return (async function* streamWithVisualEvidence() {
-          const route = parseBridgeModelId(options.model);
-          const enabledRoutes = await getEnabledRoutes(ctx, config);
-          if (!enabledRoutes.some((entry) => entry.provider === route.provider && entry.model === route.model)) {
-            throw new Error("visual bridge model is not enabled");
-          }
-          const cache = evidenceCaches.get(options.sessionId);
-          const messages = await buildBridgeMessages(ctx, options.messages, options.signal, config, cache);
-          yield* ctx.llm.stream({ ...options, provider: route.provider, model: route.model, messages });
-        })();
+        return streamWithVisualEvidence(options);
+      },
+      // resolveModel must keep declaring "image" in inputModalities, or the
+      // host projects image blocks away before this adapter ever sees them.
+      async prepareCall(provider, model, signal) {
+        return {
+          model: await this.resolveModel(provider, model, signal),
+          stream: (options) => streamWithVisualEvidence(options),
+        };
       },
     });
   } catch (error) {
