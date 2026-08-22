@@ -6,6 +6,15 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.3.0
+
+- Compatible with the new DSH host adapter interface (0.1.1-rc.8 and above).
+- Auxiliary session calls (title generation, context compaction) no longer trigger duplicate visual analyses, reducing quota usage and occasional failures.
+- Concurrent analyses of the same image and prompt are merged into a single upstream request.
+- New "Diagnostics log" setting (off by default) to output plugin runtime logs for troubleshooting.
+- Connection test improvements: uses the real token budget, and failures include an upstream response summary in the error message.
+- Install commands updated to the direct `dsh` form (requires DSH installed globally).
+
 ## What's New in 1.2.0
 
 - Reworked the settings hierarchy and connection flow: completed connections collapse by default, with full editing and **Save & Test Connection** available when expanded.
@@ -246,17 +255,6 @@ pnpm run build
 
 - The server entry is `index.mjs`; restart DSH after changing it.
 - After changing the client UI, rebuild the package and force-refresh the browser page.
-
-## Changelog
-
-### 1.3.0
-
-- Compatible with the new DSH host adapter interface (0.1.1-rc.8 and above)
-- Auxiliary session calls (title generation, context compaction) no longer trigger duplicate visual analyses, reducing quota usage and occasional failures
-- Concurrent analyses of the same image and prompt are merged into a single upstream request
-- New "Diagnostics log" setting (off by default) to output plugin runtime logs for troubleshooting
-- Connection test improvements: uses the real token budget, and failures include an upstream response summary in the error message
-- Install commands updated to the direct `dsh` form (requires DSH installed globally)
 
 ## License
 
