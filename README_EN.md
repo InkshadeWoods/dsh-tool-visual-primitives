@@ -6,6 +6,12 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.4.0
+
+- The "Chat visual models" list in settings now reads through the new model-catalog API of DSH `0.1.2-rc.1`, matching the new host.
+- The minimum supported DSH version is raised to `0.1.2-rc.1` (engine declarations in `dsh.plugin.json` and `package.json` tightened accordingly).
+- Client injection dependencies trimmed: `@deepseek-ai/dsh-client-runtime` is no longer injected.
+
 ## What's New in 1.3.0
 
 - Compatible with the new DSH host adapter interface (0.1.1-rc.8 and above).
@@ -54,7 +60,7 @@ Original text model continues the answer
 
 ## Requirements
 
-- A working DSH **Web Profile**.
+- A working DSH **Web Profile** (DSH `0.1.2-rc.1` or newer is required).
 - Node.js `>= 20` and pnpm.
 - An accessible vision-model service. By default the plugin uses OpenAI-compatible endpoints:
   - `POST <Base URL>/chat/completions`
@@ -150,24 +156,25 @@ Saved API keys are never shown again when the page is reopened. Entering a new v
 | Maximum image size | `10 MB` | Applies to local files, remote images, and chat attachments. |
 | Timeout | `180000 ms` | Maximum wait for one vision-model request. |
 | Output-token budget | `auto` or manual (default: `auto`) | `auto` follows Detail: brief `1024`, standard `2048`, verbose `4096`. |
+| Diagnostics log | `off` / `on` (default: `off`) | When enabled, plugin runtime logs are printed to the DSH console for troubleshooting. |
 
 ## The 11 Auto-Detected Modes
 
 | Mode | Best for | Evidence focus |
 | --- | --- | --- |
-| `caption` | “What is this image?” | Overall summary and key objects |
-| `object_inventory` | “What objects are present?” | Main-object list and positions |
-| `multi_subject` | “Who is shown left to right?” | Subject ordering, features, and positions |
-| `counting` | “How many buttons?” | Candidates, exclusions, and count |
-| `grounding` | “Where is the red button?” | Target and candidate locations |
-| `spatial_relation` | “Which side is A on?” | Relative position, occlusion, containment |
-| `comparison` | “Compare these two areas” | Dimensions and visible evidence for each side |
-| `path_tracing` | “How does the route go?” | Start, key points, end, uncertainty |
-| `topology` | “Is the maze solvable?” | Connectivity, blockers, and conclusion |
-| `ui_analysis` | “How do I use this screen?” | UI elements, state, location, next step |
-| `document_visual` | “Explain this chart/poster” | Headings, text blocks, tables, reading order |
+| `caption` | "What is this image?" | Overall summary and key objects |
+| `object_inventory` | "What objects are present?" | Main-object list and positions |
+| `multi_subject` | "Who is shown left to right?" | Subject ordering, features, and positions |
+| `counting` | "How many buttons?" | Candidates, exclusions, and count |
+| `grounding` | "Where is the red button?" | Target and candidate locations |
+| `spatial_relation` | "Which side is A on?" | Relative position, occlusion, containment |
+| `comparison` | "Compare these two areas" | Dimensions and visible evidence for each side |
+| `path_tracing` | "How does the route go?" | Start, key points, end, uncertainty |
+| `topology` | "Is the maze solvable?" | Connectivity, blockers, and conclusion |
+| `ui_analysis` | "How do I use this screen?" | UI elements, state, location, next step |
+| `document_visual` | "Explain this chart/poster" | Headings, text blocks, tables, reading order |
 
-The highest-priority keyword match wins; `caption` is used when nothing matches. For example, “How many buttons are on this screen?” selects `ui_analysis` and then applies the selected Detail level.
+The highest-priority keyword match wins; `caption` is used when nothing matches. For example, "How many buttons are on this screen?" selects `ui_analysis` and then applies the selected Detail level.
 
 ## Usage
 

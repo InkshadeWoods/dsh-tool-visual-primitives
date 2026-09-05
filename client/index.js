@@ -211,6 +211,7 @@ window.__ModuleLoader__.load({
 
     let credentialApi = null;
     let connectionApi = null;
+    let remoteApi = null;
 
     function getCredentialApi(ctx) {
       try {
@@ -293,12 +294,13 @@ window.__ModuleLoader__.load({
     }
 
     async function loadModelCatalog(api) {
-      if (!api?.llm?.models) throw new Error("DSH 模型目录暂不可用");
-      const response = await api.llm.models({});
-      if (!response?.result?.ok) {
-        throw new Error(response?.result?.error?.message || "无法加载模型目录");
+      if (!remoteApi?.session?.modelCatalog) throw new Error("DSH 模型目录暂不可用");
+      const response = await remoteApi.session.modelCatalog();
+      if (!response?.ok) {
+        const detail = response?.error ? `${response.error.code}: ${response.error.message}` : "无法加载模型目录";
+        throw new Error(detail);
       }
-      return response.result.value.groups.filter((group) => group.id !== "visual-primitives");
+      return response.value.groups.filter((group) => group.id !== "visual-primitives");
     }
 
     function routeKey(provider, model) {
@@ -599,7 +601,7 @@ window.__ModuleLoader__.load({
       const refreshModelCatalog = useCallback(async () => {
         setCatalogStatus({ kind: "loading", text: "正在加载可选模型…" });
         try {
-          const groups = await loadModelCatalog(connectionApi);
+          const groups = await loadModelCatalog(remoteApi);
           setModelGroups(groups);
           setCatalogStatus({ kind: "ready", text: "" });
         } catch (error) {
@@ -2194,6 +2196,7 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       credentialApi = getCredentialApi(ctx);
       connectionApi = getConnectionApi(ctx);
+      remoteApi = ctx?.remote || null;
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register(
           {
@@ -2208,7 +2211,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.apply = apply;
-    exports.inject = ["slots", "connection"];
+    exports.inject = ["slots", "connection", "remote", "remote.session"];
     return module.exports;
   },
 });
