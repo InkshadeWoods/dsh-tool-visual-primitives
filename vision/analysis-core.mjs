@@ -208,6 +208,11 @@ export async function analyzeVision(ctx, request, config, cache) {
   // Concurrent callers that miss the cache together must share one upstream
   // request: duplicate vision calls overload slow upstreams, and one failing
   // copy poisons the whole turn.
+  // Known tradeoff: the shared request runs under the FIRST caller's abort
+  // signal — if that caller cancels, every other waiter on the same key
+  // receives VISION_PARENT_ABORTED even though its own turn is still alive.
+  // Acceptable because identical same-key requests are near-always the same
+  // user intent retried; detaching them would double upstream cost.
   const inflight = inflightAnalyses.get(cacheKey);
   if (inflight) {
     reportDiagnostic({ requestId, outcome: "inflight_dedup", mode, detail, imageCount: sources.length });
@@ -244,7 +249,10 @@ export async function analyzeVision(ctx, request, config, cache) {
     });
     throw error;
   }
-  if (usesPrimitives && runtime.retry !== "off" && !isEvidenceValid(text, { mode, detail, usesPrimitives })) {
+  if (usesPrimitives && runtime.retry !== "off" && !isEvidenceValid(text, { mode, detail, usesPrimitives }) && !request.signal?.aborted) {
+    // The per-call timeout budget is created fresh inside
+    // requestVisionCompletion, so the retry gets a full window; only the
+    // parent signal is shared, which is why an aborted caller skips the retry.
     const retryMessages = [{
       role: "user",
       content: [
@@ -252,10 +260,47 @@ export async function analyzeVision(ctx, request, config, cache) {
         { type: "text", text: buildRetryPrompt(prompt, mode, text, detail, runtime.retry) },
       ],
     }];
-    text = await requestVisionCompletion({ ...runtime, messages: retryMessages, signal: request.signal });
-    if (!isEvidenceValid(text, { mode, detail, usesPrimitives })) {
+    reportDiagnostic({ requestId, outcome: "retry_start", mode, detail, retry: runtime.retry });
+    const retryStartedAt = Date.now();
+    try {
+      text = await requestVisionCompletion({ ...runtime, messages: retryMessages, signal: request.signal });
+    } catch (error) {
+      reportDiagnostic({
+        requestId,
+        outcome: "error",
+        code: error?.code || "VISION_RESPONSE_FORMAT_ERROR",
+        phase: "retry",
+        imageCount: images.length,
+        mode,
+        detail,
+        retryRequestMs: Date.now() - retryStartedAt,
+        totalMs: Date.now() - startedAt,
+        abortSource: error?.details?.abortSource,
+        httpStatus: error?.details?.httpStatus,
+        ...(error?.details?.responseExcerpt ? { responseExcerpt: error.details.responseExcerpt } : {}),
+      });
+      throw error;
+    }
+    const retryValid = isEvidenceValid(text, { mode, detail, usesPrimitives });
+    reportDiagnostic({
+      requestId,
+      outcome: "retry_complete",
+      mode,
+      detail,
+      valid: retryValid,
+      retryRequestMs: Date.now() - retryStartedAt,
+    });
+    if (!retryValid) {
       text += "\n\n[Vision Primitive Notice]\n模型未返回当前任务所需的完整视觉基元标记，以上结果按普通视觉分析返回。";
     }
+  }
+  // Never cache or forward empty evidence: with retry "off" the validity
+  // check above is skipped, so this is the last guard before a bad result
+  // becomes a sticky cache entry replayed to later turns.
+  if (!text.trim()) {
+    throw new VisionRequestError("VISION_RESPONSE_FORMAT_ERROR", "视觉模型返回了空响应内容", {
+      elapsedMs: Date.now() - startedAt,
+    });
   }
   const evidence = createVisualEvidence({ attachmentIds, imageId, mode, detail, usesPrimitives, text, runtimeScope });
   cache?.set(cacheKey, evidence);

@@ -44,9 +44,14 @@ function includesImageContent(messages) {
 }
 
 function isImageProtocolMismatch(status, responseBody, messages) {
-  if (status !== 400 || !includesImageContent(messages)) return false;
+  // Gateways reject image payloads as either 400 (OpenAI-style bad request)
+  // or 422 (validation-style unprocessable entity); both mean the same here.
+  if ((status !== 400 && status !== 422) || !includesImageContent(messages)) return false;
   const text = String(responseBody || "");
-  return /(?:type["']?\s*[:=]\s*["']?unknown|input_value=.*["']unknown["']|unexpected item type in content|(?:image_url|input_image).*(?:invalid|unsupported|unexpected)|(?:invalid|unsupported|unexpected).*(?:image_url|input_image))/is.test(text);
+  // Some gateways phrase the refusal as a split negation ("Model do not
+  // support image input") instead of the compound "unsupported" the classic
+  // OpenAI patterns use; cover both wordings.
+  return /(?:type["']?\s*[:=]\s*["']?unknown|input_value=.*["']unknown["']|unexpected item type in content|(?:image_url|input_image).*(?:invalid|unsupported|unexpected)|(?:invalid|unsupported|unexpected).*(?:image_url|input_image)|(?:do(?:es)?\s+not\s+support|not\s+support|不支持).{0,10}(?:image|input_image|图片|图像)|(?:image|input_image|图片|图像).{0,10}(?:not\s+support|不支持))/is.test(text);
 }
 
 // Gateways pack their upstream-failure detail into the error body (OpenAI
@@ -132,7 +137,11 @@ function extractResponseContent(data) {
     if (typeof message?.reasoning_content === "string" && message.reasoning_content.trim()) return message.reasoning_content;
     if (typeof parsed?.output_text === "string" && parsed.output_text.trim()) return parsed.output_text;
   } catch {
-    // Non-JSON OpenAI-compatible responses are returned as text below.
+    // Non-JSON OpenAI-compatible responses fall through to the format error.
   }
-  return data;
+  // A 2xx chat/completions reply with no extractable text is a protocol
+  // failure (reasoning models exhaust their token budget into empty content,
+  // gateways return error pages).  Returning the raw body here would inject
+  // gateway JSON into the conversation as fake "visual evidence".
+  throw new VisionRequestError("VISION_RESPONSE_FORMAT_ERROR", "视觉模型返回了空或无法解析的响应内容", {});
 }

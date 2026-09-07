@@ -6,6 +6,14 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.5.0
+
+- Fixed "DSH credential service unavailable" when saving settings on DSH 0.1.2-rc.1: credential reads/writes moved to the new `ctx.remote.credentials` API, with a compatibility path for older hosts.
+- The "Conversation enhancement" model picker now greys out models that already support image input natively (they need no bridging) and labels them accordingly.
+- Gateway image rejections (e.g. "Model do not support image input") and empty vision-model responses now produce clear error messages instead of injecting raw gateway JSON into the conversation.
+- Fixed persisted settings being overwritten by `null` values and unbounded model-catalog response reads.
+- Stability polish: retry-path diagnostics, empty-response interception, and concurrency-dedup documentation.
+
 ## What's New in 1.4.0
 
 - The "Chat visual models" list in settings now reads through the new model-catalog API of DSH `0.1.2-rc.1`, matching the new host.
@@ -36,7 +44,7 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 - Three visual-primitive policies: `auto` (default), `on`, and `off`. Primitives use `<ref>`, `<box>`, and `<point>` with normalized `0–999` coordinates.
 - Appends `[vision]` variants only for the text-only chat models you choose; original models stay unchanged.
 - Session-scoped evidence caching: a follow-up reuses evidence only when it covers the new question; otherwise the image is read again.
-- Native settings page for secure credential storage, connection checks, searchable `/models` discovery, custom model IDs, and collapsible provider/model selection.
+- Native settings page for secure credential storage, connection checks, searchable `/models` discovery, custom model IDs, and collapsible provider/model selection (native image models are greyed out).
 
 ## How It Works
 

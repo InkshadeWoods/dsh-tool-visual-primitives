@@ -141,8 +141,12 @@ function convertMessagesForTextModel(messages, selectedEvidence, cache) {
 async function buildBridgeMessages(ctx, messages, signal, config, cache, promptCache) {
   const currentMessage = findLatestUserMessage(messages);
   indexHistoricalImages(messages, cache, currentMessage?.id);
-  const prompt = textFromContent(currentMessage?.content) || DEFAULT_IMAGE_PROMPT;
-  const attachments = selectTargetAttachments(currentMessage, prompt, cache);
+  const userPrompt = textFromContent(currentMessage?.content);
+  const prompt = userPrompt || DEFAULT_IMAGE_PROMPT;
+  // Explicit-reference detection must run on what the user actually typed:
+  // the fallback prompt contains "这张图片" and would otherwise re-trigger a
+  // vision request on every repeated image-only turn.
+  const attachments = selectTargetAttachments(currentMessage, userPrompt, cache);
   const selectedEvidence = new Map();
   if (attachments.length > 0) {
     try {
@@ -239,6 +243,9 @@ export function registerVisionBridge(ctx, config) {
     return ctx.llm.registerAdapter([BRIDGE_PROVIDER_ID], {
       providerInfo: () => ({ id: BRIDGE_PROVIDER_ID, name: BRIDGE_PROVIDER_NAME }),
       providerRetryPolicy: () => undefined,
+      // The bridge converts images into text evidence before forwarding to its
+      // text-only route, so it has no provider-native image pricing to declare.
+      imageRequestPricing: () => undefined,
       async listModels() {
         const routes = await getEnabledRoutes(ctx, config);
         const results = await Promise.all(routes.map(async (route) => {

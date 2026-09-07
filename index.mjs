@@ -15,6 +15,7 @@ export const DEFAULT_CONFIG = {
 const TEST_ROUTE_PATH = "/visual-primitives/api/test-connection";
 const MODEL_CATALOG_ROUTE_PATH = "/visual-primitives/api/models";
 const SETTINGS_ROUTE_PATH = "/visual-primitives/api/settings";
+const MODEL_MODALITIES_ROUTE_PATH = "/visual-primitives/api/model-modalities";
 
 const CLIENT_SETTINGS = [
   ["baseUrl", "baseUrlEnv"],
@@ -108,6 +109,31 @@ function extractModelIds(payload) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+const MODEL_CATALOG_MAX_BYTES = 2 * 1024 * 1024;
+
+// A misbehaving upstream could answer /models with an unbounded body; read it
+// in bounded chunks instead of buffering the whole response into memory.
+async function readBoundedJson(response, maxBytes) {
+  const declared = Number(response.headers.get("content-length") || 0);
+  if (declared > maxBytes) throw new Error(`模型目录响应超过 ${maxBytes} 字节上限`);
+  const reader = response.body?.getReader();
+  if (!reader) return response.json();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw new Error(`模型目录响应超过 ${maxBytes} 字节上限`);
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return JSON.parse(Buffer.concat(chunks, total).toString("utf8"));
+}
+
 function registerModelCatalogRoute(ctx, config) {
   return ctx.webServer.register({
     kind: "exact",
@@ -136,10 +162,54 @@ function registerModelCatalogRoute(ctx, config) {
           signal: AbortSignal.timeout(15_000),
         });
         if (!response.ok) throw new Error(`模型目录请求失败（HTTP ${response.status}，${targetUrl}）`);
-        const models = extractModelIds(await response.json());
+        const models = extractModelIds(await readBoundedJson(response, MODEL_CATALOG_MAX_BYTES));
         writeJson(res, 200, { ok: true, models });
       } catch (error) {
         writeJson(res, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  });
+}
+
+// The settings client must grey out models that already support image input
+// natively: the bridge only serves text-only models, and the DSH model
+// catalog RPC does not carry inputModalities.  This endpoint exposes the same
+// per-model modalities the bridge adapter itself consults.
+function registerModelModalitiesRoute(ctx) {
+  return ctx.webServer.register({
+    kind: "exact",
+    path: MODEL_MODALITIES_ROUTE_PATH,
+    handler: async (req, res) => {
+      if (req.method !== "GET") {
+        writeJson(res, 405, { ok: false, error: "method not allowed" });
+        return;
+      }
+      if (!isSameOriginRequest(req)) {
+        writeJson(res, 403, { ok: false, error: "forbidden" });
+        return;
+      }
+      try {
+        const modalities = {};
+        const llm = ctx.llm;
+        if (llm?.listProviders && typeof llm.listModels === "function") {
+          const providers = llm.listProviders().filter((provider) => provider.id !== "visual-primitives");
+          await Promise.all(providers.map(async (provider) => {
+            try {
+              const models = await llm.listModels(provider.id);
+              modalities[provider.id] = Object.fromEntries(
+                models.map((model) => [model.id, Array.isArray(model.inputModalities) ? model.inputModalities : []]),
+              );
+            } catch {
+              modalities[provider.id] = {};
+            }
+          }));
+        }
+        writeJson(res, 200, { ok: true, modalities });
+      } catch (error) {
+        writeJson(res, 500, {
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -197,6 +267,7 @@ export function apply(ctx, config) {
         registerConnectionTestRoute(webCtx, cfg),
         registerModelCatalogRoute(webCtx, cfg),
         registerSettingsRoute(webCtx, cfg),
+        registerModelModalitiesRoute(webCtx),
       ].filter((disposer) => typeof disposer === "function");
       return () => {
         for (const dispose of routeDisposers) dispose();

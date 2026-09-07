@@ -30,7 +30,11 @@ export function registerVisionTool(ctx, config) {
       },
       render: (_args, value) => [{ type: "text", text: value.text }],
     },
-    timeoutMs: config.timeoutMs,
+    // The tool-level timeout is fixed at registration, while the per-request
+    // timeout is user-configurable up to 300s in the settings page.  Register
+    // the ceiling so the host never kills an analysis the runtime still
+    // allows; the configured timeout still applies inside the request.
+    timeoutMs: Math.max(Number(config.timeoutMs) || 0, 300_000),
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       await refreshDiagnosticSwitch(ctx, config);

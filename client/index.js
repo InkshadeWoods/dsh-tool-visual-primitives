@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
     const TEST_ROUTE_PATH = "/visual-primitives/api/test-connection";
     const VISION_MODEL_CATALOG_ROUTE_PATH = "/visual-primitives/api/models";
     const SETTINGS_ROUTE_PATH = "/visual-primitives/api/settings";
+    const MODEL_MODALITIES_ROUTE_PATH = "/visual-primitives/api/model-modalities";
     const BYTES_PER_MEGABYTE = 1024 * 1024;
     const CREDENTIAL_SYNC_DELAY_MS = 400;
     const CONFIRM_ACTION_TIMEOUT_MS = 4000;
@@ -164,8 +165,12 @@ window.__ModuleLoader__.load({
           : FALLBACKS.maxTokensMode;
       return {
         ...FALLBACKS,
-        ...Object.fromEntries(PERSISTED_KEYS.map((key) => [key, persisted[key]]).filter(([, value]) => value !== undefined)),
+        // The settings endpoint reports unconfigured values as null; only
+        // concrete values may override the string fallbacks below.
+        ...Object.fromEntries(PERSISTED_KEYS.map((key) => [key, persisted[key]]).filter(([, value]) => value !== undefined && value !== null)),
         apiKey: "",
+        baseUrl: typeof persisted.baseUrl === "string" ? persisted.baseUrl : FALLBACKS.baseUrl,
+        model: typeof persisted.model === "string" ? persisted.model : FALLBACKS.model,
         primitives: normalizeOption(persisted.primitives, FALLBACKS.primitives, ["auto", "on", "off"]),
         detail: normalizeOption(persisted.detail, FALLBACKS.detail, ["brief", "standard", "verbose"]),
         retry: normalizeOption(persisted.retry, FALLBACKS.retry, ["off", "on", "format-only"]),
@@ -210,28 +215,66 @@ window.__ModuleLoader__.load({
     /* ── credential API bridge ─────────────────────────────── */
 
     let credentialApi = null;
-    let connectionApi = null;
     let remoteApi = null;
 
+    // DSH 0.1.2-rc.1+ exposes credentials on ctx.remote.credentials (RPC
+    // namespace, set/unset/describe with plain arguments).  Older hosts
+    // (0.1.1-rc.2 and before) carried them on ctx.connection.api.credentials
+    // with {ref,value}/{refs} argument objects.  This adapter normalizes both
+    // backends into one surface so the rest of the settings code is shape-free.
     function getCredentialApi(ctx) {
+      const remote = ctx?.remote?.credentials || null;
+      let legacy = null;
       try {
-        const connection = ctx?.get?.("connection");
-        return connection?.api?.credentials || null;
+        legacy = ctx?.get?.("connection")?.api?.credentials || null;
       } catch {
-        return null;
+        legacy = null;
       }
-    }
-
-    function getConnectionApi(ctx) {
-      try {
-        return ctx?.get?.("connection")?.api || null;
-      } catch {
-        return null;
-      }
+      const backend = remote || legacy;
+      if (!backend) return null;
+      const isRemote = Boolean(remote);
+      const settle = (res, okShape, message) => {
+        const ok = okShape === true;
+        return { ok, error: ok ? undefined : (res?.error?.message || res?.result?.error?.message || message) };
+      };
+      return {
+        async set(ref, value) {
+          try {
+            const res = isRemote
+              ? await backend.set(ref, value)
+              : await backend.set({ ref, value });
+            return settle(res, isRemote ? res?.ok === true : res?.result?.ok === true, `无法保存 ${ref}`);
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
+        },
+        async unset(ref) {
+          try {
+            const res = isRemote
+              ? await backend.unset(ref)
+              : await backend.unset({ ref });
+            return settle(res, isRemote ? res?.ok === true : res?.result?.ok === true, `无法清除 ${ref}`);
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
+        },
+        async describe(refs) {
+          try {
+            const res = isRemote
+              ? await backend.describe(refs)
+              : await backend.describe({ refs });
+            const ok = isRemote ? res?.ok === true : res?.result?.ok === true;
+            if (!ok) return { ok: false, error: res?.error?.message || res?.result?.error?.message || "无法读取密钥配置状态" };
+            return { ok: true, value: isRemote ? (res?.value || {}) : (res?.result?.value?.credentials || {}) };
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
+        },
+      };
     }
 
     async function syncCredentials(api, state, touchedKeys) {
-      if (!api?.set || !api?.unset) throw new Error("DSH 凭据服务暂不可用");
+      if (!api) throw new Error("DSH 凭据服务暂不可用");
       const entries = [
         ["VISION_API_KEY", state.apiKey, "apiKey"],
         ["VISION_BASE_URL", state.baseUrl, "baseUrl"],
@@ -251,10 +294,10 @@ window.__ModuleLoader__.load({
         // 清空输入框不应误删已保存的密钥；移除密钥必须走「清除 API Key」按钮。
         if (!trimmed && key === "apiKey") continue;
         const response = trimmed
-          ? await api.set({ ref, value: trimmed })
-          : await api.unset({ ref });
-        if (!response?.result?.ok) {
-          throw new Error(response?.result?.error?.message || `无法保存 ${ref}`);
+          ? await api.set(ref, trimmed)
+          : await api.unset(ref);
+        if (!response?.ok) {
+          throw new Error(response?.error || `无法保存 ${ref}`);
         }
       }
     }
@@ -270,12 +313,12 @@ window.__ModuleLoader__.load({
     }
 
     function queueCredentialUnset(api, ref) {
-      if (!api?.unset) return Promise.reject(new Error("DSH 凭据服务暂不可用"));
+      if (!api) return Promise.reject(new Error("DSH 凭据服务暂不可用"));
       const run = credentialSyncQueue
         .catch(() => undefined)
         .then(async () => {
-          const response = await api.unset({ ref });
-          if (!response?.result?.ok) throw new Error(response?.result?.error?.message || `无法清除 ${ref}`);
+          const response = await api.unset(ref);
+          if (!response?.ok) throw new Error(response?.error || `无法清除 ${ref}`);
         });
       credentialSyncQueue = run.catch(() => undefined);
       return run;
@@ -293,7 +336,7 @@ window.__ModuleLoader__.load({
       };
     }
 
-    async function loadModelCatalog(api) {
+    async function loadModelCatalog() {
       if (!remoteApi?.session?.modelCatalog) throw new Error("DSH 模型目录暂不可用");
       const response = await remoteApi.session.modelCatalog();
       if (!response?.ok) {
@@ -301,6 +344,16 @@ window.__ModuleLoader__.load({
         throw new Error(detail);
       }
       return response.value.groups.filter((group) => group.id !== "visual-primitives");
+    }
+
+    // The DSH model catalog RPC omits inputModalities; the bridge exposes the
+    // same per-model modalities it consults, so the selector can grey out
+    // models that already support images natively.
+    async function loadModelModalities() {
+      const response = await fetch(MODEL_MODALITIES_ROUTE_PATH, { headers: { Accept: "application/json" } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok !== true) return {};
+      return payload.modalities && typeof payload.modalities === "object" ? payload.modalities : {};
     }
 
     function routeKey(provider, model) {
@@ -324,13 +377,13 @@ window.__ModuleLoader__.load({
 
     async function describeApiKey(api) {
       if (!api?.describe) return { kind: "unknown", configured: false };
-      const response = await api.describe({ refs: ["VISION_API_KEY"] });
-      if (!response?.result?.ok) {
-        throw new Error(response?.result?.error?.message || "无法读取密钥配置状态");
+      const response = await api.describe(["VISION_API_KEY"]);
+      if (!response?.ok) {
+        throw new Error(response?.error || "无法读取密钥配置状态");
       }
       return {
         kind: "ready",
-        configured: response.result.value.credentials?.VISION_API_KEY?.configured === true,
+        configured: response.value?.VISION_API_KEY?.configured === true,
       };
     }
 
@@ -371,6 +424,7 @@ window.__ModuleLoader__.load({
       const [apiKeyStatus, setApiKeyStatus] = useState({ kind: "loading", configured: false });
       const [modelSyncStatus, setModelSyncStatus] = useState({ kind: "idle", text: "" });
       const [modelGroups, setModelGroups] = useState([]);
+      const [modelModalities, setModelModalities] = useState({});
       const [catalogStatus, setCatalogStatus] = useState({ kind: "loading", text: "正在加载可选模型…" });
       const [visionModelOptions, setVisionModelOptions] = useState([]);
       const [visionModelStatus, setVisionModelStatus] = useState({ kind: "idle", text: "点击“加载模型”获取当前视觉服务的 /models 列表。" });
@@ -601,8 +655,12 @@ window.__ModuleLoader__.load({
       const refreshModelCatalog = useCallback(async () => {
         setCatalogStatus({ kind: "loading", text: "正在加载可选模型…" });
         try {
-          const groups = await loadModelCatalog(remoteApi);
+          const [groups, modalities] = await Promise.all([
+            loadModelCatalog(),
+            loadModelModalities().catch(() => ({})),
+          ]);
           setModelGroups(groups);
+          setModelModalities(modalities);
           setCatalogStatus({ kind: "ready", text: "" });
         } catch (error) {
           setCatalogStatus({
@@ -643,6 +701,9 @@ window.__ModuleLoader__.load({
       const toggleVisionModel = (provider, model) => {
         const key = routeKey(provider, model);
         const exists = state.enabledModels.some((entry) => routeKey(entry.provider, entry.model) === key);
+        // 本身支持图片输入的模型无需桥接；仅允许取消勾选历史残留。
+        const modalities = modelModalities?.[provider]?.[model];
+        if (!exists && Array.isArray(modalities) && modalities.includes("image")) return;
         const enabledModels = exists
           ? state.enabledModels.filter((entry) => routeKey(entry.provider, entry.model) !== key)
           : [...state.enabledModels, { provider, model }];
@@ -1218,6 +1279,7 @@ window.__ModuleLoader__.load({
               children: /* @__PURE__ */ reactJsxRuntime.jsx(VisionModelSelector, {
                 groups: modelGroups,
                 enabledModels: state.enabledModels,
+                modalities: modelModalities,
                 catalogStatus,
                 modelSyncStatus,
                 toggleModel: toggleVisionModel,
@@ -2009,7 +2071,7 @@ window.__ModuleLoader__.load({
       });
     }
 
-    function VisionModelSelector({ groups, enabledModels, catalogStatus, modelSyncStatus, toggleModel, refreshCatalog, unavailableEnabledModels, embedded }) {
+    function VisionModelSelector({ groups, enabledModels, modalities, catalogStatus, modelSyncStatus, toggleModel, refreshCatalog, unavailableEnabledModels, embedded }) {
       const [expandedProviders, setExpandedProviders] = useState(() => new Set());
       const enabled = new Set(enabledModels.map((entry) => routeKey(entry.provider, entry.model)));
       const toggleProvider = (provider) => {
@@ -2059,7 +2121,7 @@ window.__ModuleLoader__.load({
           }),
           /* @__PURE__ */ reactJsxRuntime.jsx("p", {
             style: { margin: "0 0 12px", fontSize: 12, lineHeight: 1.55, color: "var(--dsw-alias-label-secondary, #aaa)" },
-            children: "选择需要由外部视觉模型增强的纯文本对话模型。修改会自动保存；重新打开模型列表后即可使用。",
+            children: "选择需要由外部视觉模型增强的纯文本对话模型。本身支持图片输入的模型无需增强，已置灰显示。修改会自动保存；重新打开模型列表后即可使用。",
           }),
           unavailableEnabledModels.length > 0 &&
             /* @__PURE__ */ reactJsxRuntime.jsx("div", {
@@ -2103,7 +2165,10 @@ window.__ModuleLoader__.load({
             }),
           catalogStatus.kind === "ready" && groups.map((group, groupIndex) => {
             const models = Array.isArray(group.models) ? group.models : [];
+            const providerModalities = modalities?.[group.id] || {};
+            const isNativeVision = (model) => Array.isArray(providerModalities[model.id]) && providerModalities[model.id].includes("image");
             const providerEnabledCount = models.filter((model) => enabled.has(routeKey(group.id, model.id))).length;
+            const providerBridgableCount = models.filter((model) => !isNativeVision(model)).length;
             const expanded = expandedProviders.has(group.id);
             const panelId = `vision-provider-${groupIndex}`;
             return /* @__PURE__ */ reactJsxRuntime.jsxs("section", {
@@ -2140,7 +2205,7 @@ window.__ModuleLoader__.load({
                         /* @__PURE__ */ reactJsxRuntime.jsx("span", { style: { fontSize: 13, fontWeight: 600 }, children: group.name || group.id }),
                         /* @__PURE__ */ reactJsxRuntime.jsx("span", {
                           style: { fontSize: 12, color: "var(--dsw-alias-label-tertiary, #888)" },
-                          children: providerEnabledCount > 0 ? `${models.length} 个模型 · 已启用 ${providerEnabledCount} 个` : `${models.length} 个模型`,
+                          children: providerEnabledCount > 0 ? `${providerBridgableCount} 个模型可增强 · 已启用 ${providerEnabledCount} 个` : `${providerBridgableCount} 个模型可增强`,
                         }),
                       ],
                     }),
@@ -2158,6 +2223,8 @@ window.__ModuleLoader__.load({
                     style: { padding: "6px 4px 2px" },
                     children: models.map((model) => {
                   const key = routeKey(group.id, model.id);
+                  const nativeVision = isNativeVision(model);
+                  const checked = enabled.has(key);
                   return /* @__PURE__ */ reactJsxRuntime.jsxs("label", {
                     className: "vision-model-check-row",
                     style: {
@@ -2165,13 +2232,15 @@ window.__ModuleLoader__.load({
                       alignItems: "center",
                       gap: 8,
                       padding: "6px 4px",
-                      cursor: "pointer",
+                      cursor: nativeVision && !checked ? "not-allowed" : "pointer",
                       fontSize: 13,
+                      opacity: nativeVision ? 0.55 : 1,
                     },
                     children: [
                       /* @__PURE__ */ reactJsxRuntime.jsx("input", {
                         type: "checkbox",
-                        checked: enabled.has(key),
+                        checked,
+                        disabled: nativeVision && !checked,
                         onChange: () => toggleModel(group.id, model.id),
                       }),
                       /* @__PURE__ */ reactJsxRuntime.jsx("span", { children: model.name }),
@@ -2179,6 +2248,11 @@ window.__ModuleLoader__.load({
                         /* @__PURE__ */ reactJsxRuntime.jsx("span", {
                           style: { color: "var(--dsw-alias-label-tertiary, #888)", fontSize: 12 },
                           children: `(${model.id})`,
+                        }),
+                      nativeVision &&
+                        /* @__PURE__ */ reactJsxRuntime.jsx("span", {
+                          style: { color: "var(--dsw-alias-label-tertiary, #888)", fontSize: 12 },
+                          children: "· 自带图片支持，无需增强",
                         }),
                     ],
                   }, key);
@@ -2195,7 +2269,6 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       credentialApi = getCredentialApi(ctx);
-      connectionApi = getConnectionApi(ctx);
       remoteApi = ctx?.remote || null;
       ctx.slots.inject("settings.section", () =>
         ctx.slots.register(
@@ -2211,7 +2284,7 @@ window.__ModuleLoader__.load({
     }
 
     exports.apply = apply;
-    exports.inject = ["slots", "connection", "remote", "remote.session"];
+    exports.inject = ["slots", "connection", "remote", "remote.session", "remote.credentials"];
     return module.exports;
   },
 });
