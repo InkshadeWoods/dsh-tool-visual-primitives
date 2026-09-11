@@ -6,6 +6,11 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.5.1
+
+- Declares compatibility with DSH `0.1.5-rc.2`: verified end-to-end in a real session (conversation-enhancement bridge calls, credential read/write, settings and model-catalog routes, and attachment reads all work).
+- Adds an explicit `@deepseek-ai/dsh` peer dependency (`>=0.1.2-rc.1`), matching the existing engine declaration, so npm install resolution checks the host version.
+
 ## What's New in 1.5.0
 
 - Fixed "DSH credential service unavailable" when saving settings on DSH 0.1.2-rc.1: credential reads/writes moved to the new `ctx.remote.credentials` API, with a compatibility path for older hosts.
