@@ -21,10 +21,16 @@ for (const [network, prefix] of [
   ["240.0.0.0", 4],
 ]) REMOTE_ADDRESS_BLOCKLIST.addSubnet(network, prefix, "ipv4");
 
+// NOTE: `::ffff:0:0/96` (IPv4-mapped IPv6) must NOT be added here.
+// Node's BlockList stores every IPv4 address internally as its IPv4-mapped
+// form (`::ffff:a.b.c.d`), so that subnet covers the entire IPv4 space and
+// would reject every public IPv4 host. The IPv4 rules below already match
+// mapped addresses automatically (Node normalizes on both add and check),
+// so private/reserved IPv4 ranges stay blocked in their mapped form too —
+// verified: `check('::ffff:10.0.0.1', 'ipv6') === true`.
 for (const [network, prefix] of [
   ["::", 128],
   ["::1", 128],
-  ["::ffff:0:0", 96],
   ["fc00::", 7],
   ["fe80::", 10],
   ["ff00::", 8],
@@ -51,14 +57,22 @@ function validateRemoteAddresses(addresses) {
   return safe;
 }
 
+// NOTE: net.connect's custom `lookup` MUST invoke the callback in `all: true`
+// array form. Passing a single address string (`callback(err, address, family)`)
+// is silently dropped by Node, which then fails with
+// `ERR_INVALID_IP_ADDRESS: Invalid IP address: undefined`.
 const SAFE_REMOTE_DISPATCHER = new Agent({
   connect: {
     lookup(hostname, options, callback) {
       lookup(hostname, { all: true, verbatim: true })
         .then((addresses) => {
           const safe = validateRemoteAddresses(addresses);
+          if (safe.length === 0) {
+            callback(new Error("image URL must not target a private or reserved network"));
+            return;
+          }
           const preferred = safe.find(({ family }) => !options.family || family === options.family) ?? safe[0];
-          callback(null, preferred.address, preferred.family);
+          callback(null, [{ address: preferred.address, family: preferred.family }]);
         })
         .catch((error) => callback(error));
     },

@@ -76,7 +76,12 @@ function attachmentReadErrorCode(error) {
   const code = typeof error?.code === "string" ? error.code : "";
   if (/^ATTACHMENT_[A-Z_]+$/.test(code)) return code;
   if (error?.name === "AbortError") return "ATTACHMENT_READ_ABORTED";
-  return "ATTACHMENT_READ_ERROR";
+  // Non-ATTACHMENT_* failures (e.g. the SSRF guard in image-source.mjs raising
+  // a plain Error) used to be collapsed into ATTACHMENT_READ_ERROR, hiding the
+  // real cause. Keep the stable suffix for machine matching, but append the
+  // original message so operators can actually diagnose the failure.
+  const message = typeof error?.message === "string" ? error.message.trim() : "";
+  return message ? `ATTACHMENT_READ_ERROR: ${message}` : "ATTACHMENT_READ_ERROR";
 }
 
 function attachmentReferenceDiagnostics(sources) {

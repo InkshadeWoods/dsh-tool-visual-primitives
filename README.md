@@ -6,6 +6,14 @@
 
 > 已发布至 npm。推荐使用下方的 DSH 官方一键安装命令；GitHub 源码挂载方式保留给开发与本地调试。
 
+## 1.5.2 更新
+
+- 声明对 DSH `0.1.7-rc.2` 的兼容性：已对 0.1.5-rc.2 → 0.1.7-rc.2 的宿主契约面做过完整比对（`ctx.llm` 适配器与路由、`ctx.credentials`、`ctx.attachments.readImage`、`ctx.fs`、`ctx.remote.credentials` RPC、`webServer` 路由注册、client 装配四注入点全部兼容），并在真实会话中运行验证通过。
+- 修复 SSRF 防护的两个缺陷（`vision/image-source.mjs`）：① 移除 `::ffff:0:0/96` 封锁规则——Node 的 BlockList 内部将所有 IPv4 地址以 IPv4-mapped 形式存储，该规则会误杀全部公网 IPv4 主机；IPv4 规则本身即可覆盖映射形式。② `net.connect` 自定义 `lookup` 回调改为 `all: true` 数组契约，并在解析结果全部命中封锁时显式回调错误——此前传单地址字符串会被 Node 静默丢弃、空结果传 undefined，均表现为 `ERR_INVALID_IP_ADDRESS`。
+- 附件读取错误码附带原始 message（`vision/analysis-core.mjs`）：非 `ATTACHMENT_*` 故障（如 SSRF 守卫抛出的普通 Error）不再被折叠成裸 `ATTACHMENT_READ_ERROR`，保留稳定后缀供机器匹配的同时输出真实原因，便于诊断。
+- 适配 0.1.7 新增宿主能力的说明：宿主持新增了 `IMAGE_OFFLOAD_REQUIRED` 图片预算机制与 text-only 模型图片投影工具，但桥接模型声明 `image` 输入能力，宿主会将图片原样转发给桥接适配器，由插件转换为视觉证据文本后再转发底层模型，与宿主持机制互不冲突。
+- GUI 模型选择器在 0.1.7 起按 catalog 成员资格过滤：插件的 `listModels` 会动态列出全部已启用路由的桥接模型，配置后即可在选择器中正常显示与选用。
+
 ## 1.5.1 更新
 
 - 声明对 DSH `0.1.5-rc.2` 的兼容性：已在真实会话中实测通过（对话增强 bridge 调用、凭据读写、设置与模型目录路由、附件读取全链路正常）。

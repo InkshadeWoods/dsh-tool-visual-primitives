@@ -6,6 +6,14 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.5.2
+
+- Declares compatibility with DSH `0.1.7-rc.2`: the host contract surface between 0.1.5-rc.2 and 0.1.7-rc.2 was fully compared (`ctx.llm` adapter and routing, `ctx.credentials`, `ctx.attachments.readImage`, `ctx.fs`, the `ctx.remote.credentials` RPC, `webServer` route registration, and all four client injection points are compatible) and verified in a real session.
+- Fixes two SSRF-guard defects (`vision/image-source.mjs`): ① the `::ffff:0:0/96` block rule was removed — Node's BlockList stores every IPv4 address internally in IPv4-mapped form, so that rule rejected every public IPv4 host (the IPv4 rules already cover the mapped form); ② the `net.connect` custom `lookup` callback now uses the `all: true` array contract and reports an explicit error when every resolved address is blocked — previously a single-address string was silently dropped by Node and an empty result passed `undefined`, both surfacing as `ERR_INVALID_IP_ADDRESS`.
+- Attachment read error codes now carry the original message (`vision/analysis-core.mjs`): non-`ATTACHMENT_*` failures (e.g. the plain Error raised by the SSRF guard) are no longer collapsed into a bare `ATTACHMENT_READ_ERROR`; the stable suffix stays for machine matching while the real cause becomes diagnosable.
+- Notes on the new 0.1.7 host capabilities: the host adds an `IMAGE_OFFLOAD_REQUIRED` image-budget mechanism and text-only image projection helpers, but the bridge model declares `image` input, so the host forwards images to the bridge adapter unchanged, where the plugin converts them into visual-evidence text before forwarding to the underlying model — no conflict with the host mechanisms.
+- GUI model selection in 0.1.7 filters by catalog membership: the plugin's `listModels` dynamically lists every enabled route's bridge model, so configured bridges appear and can be selected normally.
+
 ## What's New in 1.5.1
 
 - Declares compatibility with DSH `0.1.5-rc.2`: verified end-to-end in a real session (conversation-enhancement bridge calls, credential read/write, settings and model-catalog routes, and attachment reads all work).
