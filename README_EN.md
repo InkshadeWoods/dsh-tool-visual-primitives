@@ -6,6 +6,13 @@ The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://g
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
+## What's New in 1.5.3
+
+- Declares compatibility with DSH `0.2.0-rc.2`: verified end-to-end in real Web and desktop sessions (conversation-enhancement bridging, the `vision_analyze` tool, credential reads/writes, and the settings panel all work). Since 0.2.0 the version gate checks both `engines.dsh` and `peerDependencies`; this plugin's open-ended `>=0.1.2-rc.1` floors on both sides pass without any exemption.
+- Fixed `Invalid schema for function 'vision_analyze'` when chatting through official models: the tool's parameter declaration is now a standard JSON Schema with an `object` root, matching what the host's `defineTool` compiles to. The host projects tool parameters verbatim to the model API, and DeepSeek official endpoints strictly require an object-rooted schema — the previous property-map shape was rejected. Custom models are unaffected.
+- Fixed 403 on the desktop settings panel: the desktop front end loads through an Electron custom protocol without a `Referer`, so the same-origin check now allows loopback requests that lack a source header or carry a non-http/https protocol origin; malicious web pages always send an http/https Origin and cannot enter the new branches, so security is not weakened.
+- Requirements updated: DSH `0.1.2-rc.1` or newer is required, verified up to `0.2.0-rc.2`.
+
 ## What's New in 1.5.2
 
 - Declares compatibility with DSH `0.1.7-rc.2`: the host contract surface between 0.1.5-rc.2 and 0.1.7-rc.2 was fully compared (`ctx.llm` adapter and routing, `ctx.credentials`, `ctx.attachments.readImage`, `ctx.fs`, the `ctx.remote.credentials` RPC, `webServer` route registration, and all four client injection points are compatible) and verified in a real session.
@@ -81,7 +88,7 @@ Original text model continues the answer
 
 ## Requirements
 
-- A working DSH **Web Profile** (DSH `0.1.2-rc.1` or newer is required).
+- A working DSH **Web Profile** (DSH `0.1.2-rc.1` or newer is required, verified up to `0.2.0-rc.2`).
 - Node.js `>= 20` and pnpm.
 - An accessible vision-model service. By default the plugin uses OpenAI-compatible endpoints:
   - `POST <Base URL>/chat/completions`

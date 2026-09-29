@@ -6,6 +6,13 @@
 
 > 已发布至 npm。推荐使用下方的 DSH 官方一键安装命令；GitHub 源码挂载方式保留给开发与本地调试。
 
+## 1.5.3 更新
+
+- 声明对 DSH `0.2.0-rc.2` 的兼容性：已在 Web 与桌面版真实环境实测通过（对话增强、`vision_analyze` 工具、凭据读写、设置面板全链路正常）。0.2.0 起版本门禁同时检查 `engines.dsh` 与 `peerDependencies`，本插件两侧均为 `>=0.1.2-rc.1` 开下界声明，无需豁免直接通过。
+- 修复官方模型对话报 `Invalid schema for function 'vision_analyze'` 的问题：工具参数声明改为标准 JSON Schema（`type: "object"` 根），与宿主 `defineTool` 编译产物同形态。宿主把工具参数原样透传给模型 API，DeepSeek 官方端严格校验 schema 必须以 object 为根，旧的属性映射写法会被拒绝；自定义模型不受影响。
+- 修复桌面版设置面板 403 的问题：桌面形态下前端经 Electron 自定义协议加载且不带 `Referer`，同源校验新增对回环目标的放行分支（缺来源头，或来源为非 http/https 协议时放行回环请求）；浏览器恶意网页必带 http/https Origin，无法进入新分支，安全性不倒退。
+- 前置条件更新：要求 DSH `0.1.2-rc.1` 或更高版本，已实测至 `0.2.0-rc.2`。
+
 ## 1.5.2 更新
 
 - 声明对 DSH `0.1.7-rc.2` 的兼容性：已对 0.1.5-rc.2 → 0.1.7-rc.2 的宿主契约面做过完整比对（`ctx.llm` 适配器与路由、`ctx.credentials`、`ctx.attachments.readImage`、`ctx.fs`、`ctx.remote.credentials` RPC、`webServer` 路由注册、client 装配四注入点全部兼容），并在真实会话中运行验证通过。
@@ -81,7 +88,7 @@ detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
 
 ## 前置条件
 
-- 已可运行的 DSH **Web Profile**（要求 DSH `0.1.2-rc.1` 或更高版本）。
+- 已可运行的 DSH **Web Profile**（要求 DSH `0.1.2-rc.1` 或更高版本，已实测至 `0.2.0-rc.2`）。
 - Node.js `>= 20` 与 pnpm。
 - 一个可访问的视觉模型服务。默认使用 OpenAI 兼容端点：
   - `POST <Base URL>/chat/completions`
