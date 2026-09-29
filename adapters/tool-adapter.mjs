@@ -16,10 +16,16 @@ export function registerVisionTool(ctx, config) {
   ctx.tools.register({
     name: "vision_analyze",
     description: "Analyze an image through the visual-primitives pipeline and return pure-text evidence for a text-only model. Provide exactly one of image_path or url. The analysis mode is inferred from prompt; detail and visual-primitives format use the configured settings.",
+    // Standard JSON Schema (object root), matching what defineTool() compiles
+    // to: the host projects tool.parameters verbatim to the model API, where
+    // official endpoints reject schemas without an object root.
     parameters: {
-      image_path: { type: "string", description: "Local image file path (absolute). Omit when using url." },
-      url: { type: "string", description: "Image URL (http/https). Omit when using image_path." },
-      prompt: { type: "string", description: "Question or instruction about the image. Defaults to a general description request." },
+      type: "object",
+      properties: {
+        image_path: { type: "string", description: "Local image file path (absolute). Omit when using url." },
+        url: { type: "string", description: "Image URL (http/https). Omit when using image_path." },
+        prompt: { type: "string", description: "Question or instruction about the image. Defaults to a general description request." },
+      },
     },
     output: {
       schema: {
