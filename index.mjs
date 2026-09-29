@@ -35,14 +35,27 @@ function writeJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function isLoopbackHost(host) {
+  if (typeof host !== "string") return false;
+  const h = host.split(":")[0].toLowerCase();
+  return h === "127.0.0.1" || h === "localhost" || h === "::1" || h === "[::1]";
+}
+
 function isSameOriginRequest(req) {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
   const host = req.headers.host;
   const source = typeof origin === "string" ? origin : referer;
-  if (typeof source !== "string" || typeof host !== "string") return false;
+  if (typeof source !== "string" || typeof host !== "string") {
+    // 桌面形态（dsh-app:// 前端 + no-referrer）可能不带来源头；webServer 只绑回环
+    return isLoopbackHost(host);
+  }
   try {
-    return new URL(source).host === host;
+    const u = new URL(source);
+    if (u.host === host) return true;
+    // 桌面形态 origin 是 Electron 自定义协议（非 http/https），网页无法伪造，回环目标放行
+    if (u.protocol !== "http:" && u.protocol !== "https:" && isLoopbackHost(host)) return true;
+    return false;
   } catch {
     return false;
   }
