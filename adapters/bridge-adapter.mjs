@@ -3,7 +3,7 @@ import { createEvidenceCache, createSessionEvidenceCaches, deriveCoverageRequire
 import { formatEvidenceForModel } from "../vision/evidence.mjs";
 import { detectVisionMode, shouldUsePrimitives } from "../vision/mode-policy.mjs";
 
-const BRIDGE_PROVIDER_ID = "visual-primitives";
+export const BRIDGE_PROVIDER_ID = "visual-primitives";
 const BRIDGE_PROVIDER_NAME = "Visual Primitives";
 const VISION_MODEL_SUFFIX = " [vision]";
 const ENABLED_MODELS_ENV = "VISION_ENABLED_MODELS";

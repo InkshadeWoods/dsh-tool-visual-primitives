@@ -1,70 +1,53 @@
-# dsh-tool-visual-primitives
+<div align="center">
 
-A [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) plugin that gives text-only chat models a visual capability. It sends an image to an external vision model, then returns **plain-text visual evidence**—optionally with spatial references—to the original chat model. The chat model itself does not need native image input.
+<img src="docs/assets/banner-dsh-tool-visual-primitives.png" alt="dsh-tool-visual-primitives — giving DSH text-only models a visual capability" width="900">
 
-The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives): normalized coordinates and referenceable objects turn image understanding into evidence that later reasoning can inspect and use.
+[**中文**](README.md) · [English](README_EN.md)
+
+<!-- badges -->
+[![License](https://img.shields.io/badge/license-MIT-10b981?style=flat-square&labelColor=0b1220)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-tool-visual-primitives?style=flat-square&labelColor=0b1220&color=cb3837)](https://www.npmjs.com/package/dsh-tool-visual-primitives)
+[![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5?style=flat-square&labelColor=0b1220)](https://github.com/deepseek-ai/DeepSeek-Harness)
+[![DSH](https://img.shields.io/badge/dsh-%E2%89%A50.1.2--rc.1%20%C2%B7%20tested%20to%200.2.1--rc.2-06b6d4?style=flat-square&labelColor=0b1220)](#requirements)
+[![Modes](https://img.shields.io/badge/modes-11%20auto--detected-f59e0b?style=flat-square&labelColor=0b1220)](#the-11-auto-detected-modes)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?style=flat-square&labelColor=0b1220&logo=node.js&logoColor=white)](#requirements)
+[![Visual Primitives](https://img.shields.io/badge/visual%20primitives-text%20evidence-8b5cf6?style=flat-square&labelColor=0b1220)](#how-it-works)
+
+**Sends an image to an external vision model and returns plain-text visual evidence with spatial references — the enhanced model needs no native image input.**
+
+</div>
+
+---
+
+## What This Is
+
+Text-only models on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/DeepSeek-Harness) cannot see images. This plugin gives them that capability.
+
+The design is inspired by DeepSeek's [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives): instead of flattening an image into a vague caption, it emits structured evidence with **normalized coordinates and referenceable objects**, so later reasoning can cite and verify it.
 
 > The package is published on npm. The official DSH one-command install below is recommended; local source mounting remains available for development and local debugging.
 
-## What's New in 1.5.3
+## What's New in 1.5.4
 
-- Declares compatibility with DSH `0.2.0-rc.2`: verified end-to-end in real Web and desktop sessions (conversation-enhancement bridging, the `vision_analyze` tool, credential reads/writes, and the settings panel all work). Since 0.2.0 the version gate checks both `engines.dsh` and `peerDependencies`; this plugin's open-ended `>=0.1.2-rc.1` floors on both sides pass without any exemption.
-- Fixed `Invalid schema for function 'vision_analyze'` when chatting through official models: the tool's parameter declaration is now a standard JSON Schema with an `object` root, matching what the host's `defineTool` compiles to. The host projects tool parameters verbatim to the model API, and DeepSeek official endpoints strictly require an object-rooted schema — the previous property-map shape was rejected. Custom models are unaffected.
-- Fixed 403 on the desktop settings panel: the desktop front end loads through an Electron custom protocol without a `Referer`, so the same-origin check now allows loopback requests that lack a source header or carry a non-http/https protocol origin; malicious web pages always send an http/https Origin and cannot enter the new branches, so security is not weakened.
-- Requirements updated: DSH `0.1.2-rc.1` or newer is required, verified up to `0.2.0-rc.2`.
+- **The `vision_analyze` tool is now restricted to `[vision]` models**: calling it from any other model is explicitly denied with an actionable reason, so models that already accept images no longer have two competing paths.
+- **Image URLs now follow 30x redirects**: redirects are followed hop by hop with the SSRF check re-run on each hop. Short-link hosts such as `picsum.photos` previously failed unconditionally.
+- **Download failures now report the underlying cause**: error messages include `cause` (e.g. `UND_ERR_CONNECT_TIMEOUT`), distinguishing DNS failures, connect timeouts and TLS errors directly.
+- Connect timeout tightened to 5s, plus one bounded retry covering transient connection errors only.
 
-## What's New in 1.5.2
-
-- Declares compatibility with DSH `0.1.7-rc.2`: the host contract surface between 0.1.5-rc.2 and 0.1.7-rc.2 was fully compared (`ctx.llm` adapter and routing, `ctx.credentials`, `ctx.attachments.readImage`, `ctx.fs`, the `ctx.remote.credentials` RPC, `webServer` route registration, and all four client injection points are compatible) and verified in a real session.
-- Fixes two SSRF-guard defects (`vision/image-source.mjs`): ① the `::ffff:0:0/96` block rule was removed — Node's BlockList stores every IPv4 address internally in IPv4-mapped form, so that rule rejected every public IPv4 host (the IPv4 rules already cover the mapped form); ② the `net.connect` custom `lookup` callback now uses the `all: true` array contract and reports an explicit error when every resolved address is blocked — previously a single-address string was silently dropped by Node and an empty result passed `undefined`, both surfacing as `ERR_INVALID_IP_ADDRESS`.
-- Attachment read error codes now carry the original message (`vision/analysis-core.mjs`): non-`ATTACHMENT_*` failures (e.g. the plain Error raised by the SSRF guard) are no longer collapsed into a bare `ATTACHMENT_READ_ERROR`; the stable suffix stays for machine matching while the real cause becomes diagnosable.
-- Notes on the new 0.1.7 host capabilities: the host adds an `IMAGE_OFFLOAD_REQUIRED` image-budget mechanism and text-only image projection helpers, but the bridge model declares `image` input, so the host forwards images to the bridge adapter unchanged, where the plugin converts them into visual-evidence text before forwarding to the underlying model — no conflict with the host mechanisms.
-- GUI model selection in 0.1.7 filters by catalog membership: the plugin's `listModels` dynamically lists every enabled route's bridge model, so configured bridges appear and can be selected normally.
-
-## What's New in 1.5.1
-
-- Declares compatibility with DSH `0.1.5-rc.2`: verified end-to-end in a real session (conversation-enhancement bridge calls, credential read/write, settings and model-catalog routes, and attachment reads all work).
-- Adds an explicit `@deepseek-ai/dsh` peer dependency (`>=0.1.2-rc.1`), matching the existing engine declaration, so npm install resolution checks the host version.
-
-## What's New in 1.5.0
-
-- Fixed "DSH credential service unavailable" when saving settings on DSH 0.1.2-rc.1: credential reads/writes moved to the new `ctx.remote.credentials` API, with a compatibility path for older hosts.
-- The "Conversation enhancement" model picker now greys out models that already support image input natively (they need no bridging) and labels them accordingly.
-- Gateway image rejections (e.g. "Model do not support image input") and empty vision-model responses now produce clear error messages instead of injecting raw gateway JSON into the conversation.
-- Fixed persisted settings being overwritten by `null` values and unbounded model-catalog response reads.
-- Stability polish: retry-path diagnostics, empty-response interception, and concurrency-dedup documentation.
-
-## What's New in 1.4.0
-
-- The "Chat visual models" list in settings now reads through the new model-catalog API of DSH `0.1.2-rc.1`, matching the new host.
-- The minimum supported DSH version is raised to `0.1.2-rc.1` (engine declarations in `dsh.plugin.json` and `package.json` tightened accordingly).
-- Client injection dependencies trimmed: `@deepseek-ai/dsh-client-runtime` is no longer injected.
-
-## What's New in 1.3.0
-
-- Compatible with the new DSH host adapter interface (0.1.1-rc.8 and above).
-- Auxiliary session calls (title generation, context compaction) no longer trigger duplicate visual analyses, reducing quota usage and occasional failures.
-- Concurrent analyses of the same image and prompt are merged into a single upstream request.
-- New "Diagnostics log" setting (off by default) to output plugin runtime logs for troubleshooting.
-- Connection test improvements: uses the real token budget, and failures include an upstream response summary in the error message.
-- Install commands updated to the direct `dsh` form (requires DSH installed globally).
-
-## What's New in 1.2.0
-
-- Reworked the settings hierarchy and connection flow: completed connections collapse by default, with full editing and **Save & Test Connection** available when expanded.
-- Improved vision-model selection, model discovery, custom model IDs, connection status, and error feedback.
-- Optimized multi-turn image conversations: text-only follow-ups no longer repeat vision requests, while explicit references to earlier images can reuse cached visual evidence.
-- Added a clear, provider-neutral error message for image-content protocol incompatibility.
+> See [CHANGELOG_EN.md](CHANGELOG_EN.md) for the full release history.
 
 ## Highlights
 
-- Two entry points backed by one `vision_analyze` core: an explicit tool and `[vision]` chat-model variants.
-- Automatic detection of 11 visual tasks: captioning, inventory, multi-subject, counting, grounding, spatial relation, comparison, path tracing, topology, UI, and document visual analysis.
-- Three output-detail levels: `brief`, `standard` (default), and `verbose`.
-- Three visual-primitive policies: `auto` (default), `on`, and `off`. Primitives use `<ref>`, `<box>`, and `<point>` with normalized `0–999` coordinates.
-- Appends `[vision]` variants only for the text-only chat models you choose; original models stay unchanged.
-- Session-scoped evidence caching: a follow-up reuses evidence only when it covers the new question; otherwise the image is read again.
-- Native settings page for secure credential storage, connection checks, searchable `/models` discovery, custom model IDs, and collapsible provider/model selection (native image models are greyed out).
+| Capability | Detail |
+|---|---|
+| 🖼 **Two entry points, one core** | Explicit `vision_analyze` tool calls and `[vision]` chat-model variants share the same pipeline and evidence format |
+| 🧠 **11 auto-detected tasks** | Caption · inventory · multi-subject · counting · grounding · spatial relation · comparison · path tracing · topology · UI · document visual, selected automatically from the question |
+| 📐 **Visual primitives** | Emits `<ref>`, `<box>`, and `<point>` with normalized `0–999` coordinates, so evidence can be cited and checked by later reasoning; three policies `auto` / `on` / `off` |
+| 🎚 **Three detail levels** | `brief` · `standard` (default) · `verbose`, tuning evidence granularity and token cost to the task |
+| 🔒 **Enhances only the models you pick** | Adds `[vision]` variants to selected text-only models while originals stay unchanged; models with native image input are greyed out in the selector |
+| 💾 **Session-scoped evidence cache** | Follow-ups reuse evidence only when it covers the new task, detail and focus; otherwise the image is read again instead of treating a stale answer as fact |
+| 🎛 **Native settings page** | Secure credential storage · connection checks · searchable `/models` discovery · custom model IDs · collapsible provider/model selection |
+| 🛡 **Fetch safety** | Remote URLs reject localhost, private ranges and embedded credentials; redirects are re-validated on every hop, up to 5 hops |
 
 ## How It Works
 
@@ -88,7 +71,7 @@ Original text model continues the answer
 
 ## Requirements
 
-- A working DSH **Web Profile** (DSH `0.1.2-rc.1` or newer is required, verified up to `0.2.0-rc.2`).
+- A working DSH **Web Profile** (DSH `0.1.2-rc.1` or newer is required, verified up to `0.2.1-rc.2`).
 - Node.js `>= 20` and pnpm.
 - An accessible vision-model service. By default the plugin uses OpenAI-compatible endpoints:
   - `POST <Base URL>/chat/completions`
@@ -234,7 +217,11 @@ The tool accepts **exactly one** image source: a local absolute path or an HTTP(
 }
 ```
 
-Remote URLs cannot target localhost, private-network addresses, or include credentials. Redirects are rejected to reduce server-side request forgery risk.
+Remote URLs cannot target localhost, private-network addresses, or include credentials. Redirects are followed (up to 5 hops) so that short-link image hosts work, but the checks above are re-run on every hop — automatic following would let a redirect reach beyond what the first-hop check cleared, so hops are followed manually. Supporting redirects does not widen the server-side request forgery surface.
+
+**This tool is available to `[vision]` models only.** Calling it from any other model is explicitly denied, with a message stating the active provider, suggesting the model use its own image capability, and explaining how to switch to a `[vision]` model. This keeps models that already accept images from having two competing paths ("look at it directly" versus "external pipeline"). The denial happens before the tool runs and produces no upstream call.
+
+When no conversation vision model is configured (bridge disabled) no `[vision]` model can be selected, so the restriction is not installed and the tool stays open to every model.
 
 ### Evidence Format
 

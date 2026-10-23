@@ -1,70 +1,53 @@
-# dsh-tool-visual-primitives
+<div align="center">
 
-为 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/DeepSeek-Harness) 的纯文本模型补充视觉能力。插件把图片交给外部视觉模型分析，再把带有空间定位信息的**纯文本视觉证据**交回原对话模型；因此，被增强的模型不需要原生图片输入能力。
+<img src="docs/assets/banner-dsh-tool-visual-primitives.png" alt="dsh-tool-visual-primitives — 为 DSH 纯文本模型补充视觉能力" width="900">
 
-核心思路参考 DeepSeek 的 [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)：以归一化坐标和可引用对象，将图像理解转化为后续推理可使用、可检查的证据。
+[**中文**](README.md) · [English](README_EN.md)
+
+<!-- badges -->
+[![License](https://img.shields.io/badge/license-MIT-10b981?style=flat-square&labelColor=0b1220)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-tool-visual-primitives?style=flat-square&labelColor=0b1220&color=cb3837)](https://www.npmjs.com/package/dsh-tool-visual-primitives)
+[![DSH Plugin](https://img.shields.io/badge/DSH-plugin-4f46e5?style=flat-square&labelColor=0b1220)](https://github.com/deepseek-ai/DeepSeek-Harness)
+[![DSH](https://img.shields.io/badge/dsh-%E2%89%A50.1.2--rc.1%20%C2%B7%20tested%20to%200.2.1--rc.2-06b6d4?style=flat-square&labelColor=0b1220)](#前置条件)
+[![Modes](https://img.shields.io/badge/modes-11%20auto--detected-f59e0b?style=flat-square&labelColor=0b1220)](#11-种自动分析模式)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?style=flat-square&labelColor=0b1220&logo=node.js&logoColor=white)](#前置条件)
+[![Visual Primitives](https://img.shields.io/badge/visual%20primitives-text%20evidence-8b5cf6?style=flat-square&labelColor=0b1220)](#工作方式)
+
+**把图片交给外部视觉模型分析，再把带空间定位的纯文本视觉证据交回原对话模型——被增强的模型不需要原生图片输入能力。**
+
+</div>
+
+---
+
+## 这是什么
+
+[DeepSeek Harness（DSH）](https://github.com/deepseek-ai/DeepSeek-Harness) 的纯文本模型本身看不见图片。本插件为它们补上视觉能力。
+
+核心思路参考 DeepSeek 的 [Thinking with Visual Primitives](https://github.com/deepseek-ai/Thinking-with-Visual-Primitives)：不把图片转成一段模糊的描述，而是以**归一化坐标和可引用对象**输出结构化证据，让后续推理可以引用、可检查。
 
 > 已发布至 npm。推荐使用下方的 DSH 官方一键安装命令；GitHub 源码挂载方式保留给开发与本地调试。
 
-## 1.5.3 更新
+## 1.5.4 更新
 
-- 声明对 DSH `0.2.0-rc.2` 的兼容性：已在 Web 与桌面版真实环境实测通过（对话增强、`vision_analyze` 工具、凭据读写、设置面板全链路正常）。0.2.0 起版本门禁同时检查 `engines.dsh` 与 `peerDependencies`，本插件两侧均为 `>=0.1.2-rc.1` 开下界声明，无需豁免直接通过。
-- 修复官方模型对话报 `Invalid schema for function 'vision_analyze'` 的问题：工具参数声明改为标准 JSON Schema（`type: "object"` 根），与宿主 `defineTool` 编译产物同形态。宿主把工具参数原样透传给模型 API，DeepSeek 官方端严格校验 schema 必须以 object 为根，旧的属性映射写法会被拒绝；自定义模型不受影响。
-- 修复桌面版设置面板 403 的问题：桌面形态下前端经 Electron 自定义协议加载且不带 `Referer`，同源校验新增对回环目标的放行分支（缺来源头，或来源为非 http/https 协议时放行回环请求）；浏览器恶意网页必带 http/https Origin，无法进入新分支，安全性不倒退。
-- 前置条件更新：要求 DSH `0.1.2-rc.1` 或更高版本，已实测至 `0.2.0-rc.2`。
+- **`vision_analyze` 工具收紧为 `[vision]` 模型专用**：非 `[vision]` 模型调用会被明确拒绝并给出可操作原因，自带图片能力的模型不再有两条竞争通路。
+- **图片 URL 支持 302 跳转**：改为逐跳手动跟随、每一跳重新校验安全，此前短链图床（如 `picsum.photos`）必然读取失败。
+- **抓图失败附带底层原因**：错误信息现在包含 `cause`（如 `UND_ERR_CONNECT_TIMEOUT`），可直接区分 DNS 失败、连接超时与 TLS 错误。
+- 连接超时收紧至 5 秒，并增加一次有限重试（仅覆盖连接类瞬时错误）。
 
-## 1.5.2 更新
-
-- 声明对 DSH `0.1.7-rc.2` 的兼容性：已对 0.1.5-rc.2 → 0.1.7-rc.2 的宿主契约面做过完整比对（`ctx.llm` 适配器与路由、`ctx.credentials`、`ctx.attachments.readImage`、`ctx.fs`、`ctx.remote.credentials` RPC、`webServer` 路由注册、client 装配四注入点全部兼容），并在真实会话中运行验证通过。
-- 修复 SSRF 防护的两个缺陷（`vision/image-source.mjs`）：① 移除 `::ffff:0:0/96` 封锁规则——Node 的 BlockList 内部将所有 IPv4 地址以 IPv4-mapped 形式存储，该规则会误杀全部公网 IPv4 主机；IPv4 规则本身即可覆盖映射形式。② `net.connect` 自定义 `lookup` 回调改为 `all: true` 数组契约，并在解析结果全部命中封锁时显式回调错误——此前传单地址字符串会被 Node 静默丢弃、空结果传 undefined，均表现为 `ERR_INVALID_IP_ADDRESS`。
-- 附件读取错误码附带原始 message（`vision/analysis-core.mjs`）：非 `ATTACHMENT_*` 故障（如 SSRF 守卫抛出的普通 Error）不再被折叠成裸 `ATTACHMENT_READ_ERROR`，保留稳定后缀供机器匹配的同时输出真实原因，便于诊断。
-- 适配 0.1.7 新增宿主能力的说明：宿主持新增了 `IMAGE_OFFLOAD_REQUIRED` 图片预算机制与 text-only 模型图片投影工具，但桥接模型声明 `image` 输入能力，宿主会将图片原样转发给桥接适配器，由插件转换为视觉证据文本后再转发底层模型，与宿主持机制互不冲突。
-- GUI 模型选择器在 0.1.7 起按 catalog 成员资格过滤：插件的 `listModels` 会动态列出全部已启用路由的桥接模型，配置后即可在选择器中正常显示与选用。
-
-## 1.5.1 更新
-
-- 声明对 DSH `0.1.5-rc.2` 的兼容性：已在真实会话中实测通过（对话增强 bridge 调用、凭据读写、设置与模型目录路由、附件读取全链路正常）。
-- 新增 `@deepseek-ai/dsh` peer 依赖声明（`>=0.1.2-rc.1`），与既有的引擎声明一致，供 npm 安装解析时校验宿主版本。
-
-## 1.5.0 更新
-
-- 修复 DSH 0.1.2-rc.1 上设置页保存时“DSH 凭据服务暂不可用”的问题：凭据读写迁移到新的 `ctx.remote.credentials` 接口，并保留旧宿主的兼容路径。
-- “对话增强”模型选择器现在会置灰本身支持图片输入的模型（它们无需桥接），并标注“自带图片支持，无需增强”。
-- 网关拒绝图片输入（如 `Model do not support image input`）或视觉模型返回空内容时，改为清晰的中文错误提示，不再把网关原始 JSON 注入对话。
-- 修复持久化设置被 `null` 覆盖、模型目录响应无上限读取等问题。
-- 完善重试路径诊断、空响应拦截、并发去重注释等稳定性细节。
-
-## 1.4.0 更新
-
-- 设置页的“对话视觉模型”列表改用 DSH `0.1.2-rc.1` 的新模型目录接口读取，适配新版宿主。
-- 插件最低宿主版本要求提升为 `0.1.2-rc.1`（`dsh.plugin.json` 与 `package.json` 的引擎声明同步收紧）。
-- 客户端注入依赖精简：不再注入 `@deepseek-ai/dsh-client-runtime`。
-
-## 1.3.0 更新
-
-- 兼容新版 DSH 宿主（0.1.1-rc.8 及以上）的适配器接口。
-- 会话辅助调用（标题生成、上下文压缩）不再触发重复的视觉分析，降低配额消耗与偶发失败。
-- 相同图片与提示词的并发分析自动合并为一次上游请求。
-- 新增“诊断日志”设置项（默认关闭），可输出插件运行日志便于排查。
-- 连接测试改进：使用真实 token 预算，失败时错误信息包含上游返回摘要。
-- 安装命令更新为 `dsh` 直令形式（需已全局安装 DSH）。
-
-## 1.2.0 更新
-
-- 重构设置页面的信息层级与连接流程：已完成配置时默认折叠，并在展开后提供完整编辑与“保存并测试连接”。
-- 改进视觉模型选择、模型目录读取、手动模型 ID、连接状态与错误反馈。
-- 优化多轮图片对话：无图片的后续轮次不再重复请求视觉模型；明确引用历史图片时可复用已缓存的视觉证据。
-- 为图片内容的接口协议不兼容增加清晰、通用的错误提示。
+> 完整更新历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能
 
-- 两个入口，共用同一条 `vision_analyze` 分析核心：显式工具调用与对话中的 `[vision]` 模型。
-- 自动识别 11 类视觉任务：描述、对象清单、多主体、计数、定位、空间关系、比较、路径、拓扑、UI、文档视觉。
-- 三档分析细节：`brief`、`standard`（默认）、`verbose`。
-- 三种视觉原语策略：`auto`（默认）、`on`、`off`；原语使用 `<ref>`、`<box>`、`<point>`，坐标范围为 `0–999`。
-- 仅为你选定的纯文本模型追加 `[vision]` 变体；原模型保留，不受影响。
-- 会话级视觉证据缓存：追问仅在已有证据覆盖新问题时复用，否则重新读图。
-- 原生设置页：安全密钥存储、连接测试、`/models` 搜索选择、手动模型 ID，以及按供应商折叠选择待增强模型（自带图片输入的模型自动置灰）。
+| 能力 | 说明 |
+|---|---|
+| 🖼 **两个入口，一条核心** | 显式工具调用 `vision_analyze` 与对话中的 `[vision]` 模型，共用同一套分析管线与证据格式 |
+| 🧠 **11 类自动识别** | 描述 · 对象清单 · 多主体 · 计数 · 定位 · 空间关系 · 比较 · 路径 · 拓扑 · UI · 文档视觉，按问题自动选择模式 |
+| 📐 **视觉原语** | 以 `<ref>`、`<box>`、`<point>` 输出归一化坐标（`0–999`），证据可被后续推理引用与核对；三档策略 `auto` / `on` / `off` |
+| 🎚 **三档细节** | `brief` · `standard`（默认） · `verbose`，按任务复杂度控制证据粒度与 token 开销 |
+| 🔒 **只增强你选的模型** | 仅对指定纯文本模型追加 `[vision]` 变体，原模型保留不受影响；自带图片输入能力的模型在选择器中自动置灰 |
+| 💾 **会话级证据缓存** | 追问仅在已有证据覆盖新任务、细节与关注对象时复用，覆盖不足则重新读图，不把旧答案当事实 |
+| 🎛 **原生设置页** | 安全密钥存储 · 连接测试 · `/models` 搜索选择 · 手动模型 ID · 按供应商折叠选择待增强模型 |
+| 🛡 **读取安全** | 远程 URL 拒绝 localhost、私有网段与带凭据地址；重定向逐跳重校验，最多 5 跳 |
 
 ## 工作方式
 
@@ -88,7 +71,7 @@ detectVisionMode() → shouldUsePrimitives() → buildVisionPrompt()
 
 ## 前置条件
 
-- 已可运行的 DSH **Web Profile**（要求 DSH `0.1.2-rc.1` 或更高版本，已实测至 `0.2.0-rc.2`）。
+- 已可运行的 DSH **Web Profile**（要求 DSH `0.1.2-rc.1` 或更高版本，已实测至 `0.2.1-rc.2`）。
 - Node.js `>= 20` 与 pnpm。
 - 一个可访问的视觉模型服务。默认使用 OpenAI 兼容端点：
   - `POST <Base URL>/chat/completions`
@@ -234,7 +217,11 @@ DSH 会移除包依赖，并自动从 `dsh.profile.bundles` 清除对应 bundle�
 }
 ```
 
-远程 URL 不允许指向 localhost、私有网络地址或携带用户名/密码；重定向会被拒绝，以降低服务器端请求伪造风险。
+远程 URL 不允许指向 localhost、私有网络地址或携带用户名/密码。允许跟随重定向（最多 5 跳）以支持短链图床，但每一跳都会重新执行上述校验——若使用自动跟随，跳转就能到达首跳已放行的检查之外，因此这里逐跳手动跟随，服务器端请求伪造的风险面不因支持跳转而扩大。
+
+**该工具仅对 `[vision]` 模型开放。** 在非 `[vision]` 模型下调用会被明确拒绝，并说明当前 provider、建议改用模型自身的图片能力、以及如何切换到 `[vision]` 模型。这样，自带图片能力的模型不会同时存在“自己看”和“外部管线”两条通路。拒绝发生在工具执行之前，不会产生任何上游调用。
+
+未配置对话视觉模型（即桥接器未启用）时不存在 `[vision]` 模型可选，此时不安装该限制，工具保持对所有模型开放。
 
 ### 视觉证据格式
 

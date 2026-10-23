@@ -80,8 +80,15 @@ function attachmentReadErrorCode(error) {
   // a plain Error) used to be collapsed into ATTACHMENT_READ_ERROR, hiding the
   // real cause. Keep the stable suffix for machine matching, but append the
   // original message so operators can actually diagnose the failure.
+  // `fetch` hides the useful part in `cause` — a bare "fetch failed" carries no
+  // signal, while `cause.code` (UND_ERR_CONNECT_TIMEOUT, ENOTFOUND, ...) does.
   const message = typeof error?.message === "string" ? error.message.trim() : "";
-  return message ? `ATTACHMENT_READ_ERROR: ${message}` : "ATTACHMENT_READ_ERROR";
+  const cause = error?.cause;
+  const causeCode = typeof cause?.code === "string" ? cause.code.trim() : "";
+  const causeMessage = typeof cause?.message === "string" ? cause.message.trim() : "";
+  const causeDetail = causeCode || causeMessage;
+  const detail = [message, causeDetail && `cause: ${causeDetail}`].filter(Boolean).join(" — ");
+  return detail ? `ATTACHMENT_READ_ERROR: ${detail}` : "ATTACHMENT_READ_ERROR";
 }
 
 function attachmentReferenceDiagnostics(sources) {

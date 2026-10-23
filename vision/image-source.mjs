@@ -61,23 +61,114 @@ function validateRemoteAddresses(addresses) {
 // array form. Passing a single address string (`callback(err, address, family)`)
 // is silently dropped by Node, which then fails with
 // `ERR_INVALID_IP_ADDRESS: Invalid IP address: undefined`.
-const SAFE_REMOTE_DISPATCHER = new Agent({
-  connect: {
-    lookup(hostname, options, callback) {
-      lookup(hostname, { all: true, verbatim: true })
-        .then((addresses) => {
-          const safe = validateRemoteAddresses(addresses);
-          if (safe.length === 0) {
-            callback(new Error("image URL must not target a private or reserved network"));
-            return;
-          }
-          const preferred = safe.find(({ family }) => !options.family || family === options.family) ?? safe[0];
-          callback(null, [{ address: preferred.address, family: preferred.family }]);
-        })
-        .catch((error) => callback(error));
+//
+// A factory rather than a module-level singleton: a retry must not reuse the
+// connection pool (and therefore the DNS result) of the attempt that just
+// failed, or it will simply re-dial the same blackholed edge.
+function createSafeRemoteDispatcher() {
+  return new Agent({
+    connect: {
+      // Fail fast enough that a blackholed edge cannot eat the whole budget.
+      timeout: REMOTE_CONNECT_TIMEOUT_MS,
+      // Hosts behind a CDN resolve to a rotating set of edge addresses, and a
+      // single edge can be blackholed on one network while its siblings answer
+      // normally. Handing every validated address to the connector (instead of
+      // pinning one) lets Happy Eyeballs fall through to a healthy sibling.
+      // NOTE: some CDN hosts (e.g. fastly.picsum.photos) publish exactly ONE
+      // address, so this cannot help there — see the retry loop below.
+      autoSelectFamily: true,
+      autoSelectFamilyAttemptTimeout: 2500,
+      lookup(hostname, options, callback) {
+        lookup(hostname, { all: true, verbatim: true })
+          .then((addresses) => {
+            const safe = validateRemoteAddresses(addresses);
+            if (safe.length === 0) {
+              callback(new Error("image URL must not target a private or reserved network"));
+              return;
+            }
+            const matching = safe.filter(({ family }) => !options.family || family === options.family);
+            const candidates = matching.length > 0 ? matching : safe;
+            callback(null, candidates.map(({ address, family }) => ({ address, family })));
+          })
+          .catch((error) => callback(error));
+      },
     },
-  },
-});
+  });
+}
+
+// Transient connection failures worth retrying. Deliberately narrow: an HTTP
+// status error means the host answered (retrying would just repeat it), and an
+// SSRF rejection must never be retried.
+// Per-attempt connect ceiling. Healthy edges answered in 0.07-1.4s and the
+// slowest working one in ~4s, so 5s keeps margin for real hosts while making a
+// blackholed edge fail about twice as fast as undici's 10s default.
+const REMOTE_CONNECT_TIMEOUT_MS = 5000;
+
+const RETRYABLE_CONNECT_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EAI_AGAIN",
+]);
+
+function isRetryableConnectError(error) {
+  if (!error || error.name === "AbortError" || error.code === "ABORT_ERR") return false;
+  // The dispatcher's own SSRF rejection surfaces as a plain Error from lookup().
+  if (/must not target a private or reserved network|must not target localhost/.test(error.message ?? "")) {
+    return false;
+  }
+  const codes = [error.code, error.cause?.code].filter((code) => typeof code === "string");
+  if (codes.some((code) => RETRYABLE_CONNECT_CODES.has(code))) return true;
+  // `fetch` reports bare "fetch failed" for any transport error; the useful
+  // discriminator is the cause. Only treat it as transient when we have a cause
+  // that says so, never on the bare message alone.
+  const causeCodes = [error.cause?.code, error.cause?.cause?.code].filter((code) => typeof code === "string");
+  if (causeCodes.some((code) => RETRYABLE_CONNECT_CODES.has(code))) return true;
+  if (error.message === "fetch failed") {
+    const detail = String(error.cause?.message ?? "").toLowerCase();
+    if (detail.includes("timeout") || detail.includes("socket") || detail.includes("reset")) return true;
+  }
+  return false;
+}
+
+// Measured on the affected network: failures arrive in long unbroken runs (20
+// consecutive failures over 10s at 500ms sampling, and a 20s run in a separate
+// 60s sample), while the good edge is the one DNS already returns. That rules
+// out the two things retry is good at (a wrong address, a momentary blip): no
+// backoff short enough to keep the tool responsive can outlast these runs, and
+// longer backoff only converts a ~5s failure into a ~40s one.
+//
+// So retry stays deliberately small: it catches the genuinely momentary case
+// (one lost SYN) at a bounded cost, and gives up quickly otherwise so the caller
+// sees the real error instead of a long stall.
+const REMOTE_ATTEMPT_BACKOFF_MS = [400];
+
+const delay = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("image download aborted"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener?.("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("image download aborted"));
+    };
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+  });
+
+// A short-link (picsum, most image CDNs) answers with a 30x to the real asset.
+// Following it manually — revalidating each hop through assertSafeRemoteUrl —
+// keeps the SSRF guard intact: `redirect: "follow"` would let a redirect reach
+// a private address that the first-hop check already cleared.
+const MAX_REMOTE_REDIRECTS = 5;
 
 function detectImageMediaType(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
@@ -251,14 +342,49 @@ async function readLocalImage(ctx, path, maxBytes, signal) {
   return toImageData(bytes);
 }
 
+async function fetchRemoteImageOnce(url, maxBytes, signal) {
+  const dispatcher = createSafeRemoteDispatcher();
+  try {
+    let target = await assertSafeRemoteUrl(url);
+    let response;
+    for (let hop = 0; ; hop += 1) {
+      // `redirect: "manual"` rather than "error": short-links are the normal case
+      // for image hosts, and "error" surfaced them as an opaque `fetch failed`.
+      // Every hop is revalidated below, so following stays as safe as rejecting.
+      response = await fetch(target, { signal, redirect: "manual", dispatcher });
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.headers.get("location");
+      if (!location) break;
+      if (hop >= MAX_REMOTE_REDIRECTS) throw new Error(`image download exceeded ${MAX_REMOTE_REDIRECTS} redirects`);
+      await response.body?.cancel().catch(() => undefined);
+      target = await assertSafeRemoteUrl(new URL(location, target).toString());
+    }
+    if (!response.ok) throw new Error(`image download failed with status ${response.status}`);
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (maxBytes && contentLength > maxBytes) throw new Error(`image size exceeds maxImageBytes ${maxBytes}`);
+    const bytes = await readResponseBytes(response, maxBytes);
+    return toImageData(bytes);
+  } finally {
+    // Each attempt owns its pool; leaving sockets around would keep the failed
+    // edge's connection alive and fingerprint later attempts.
+    await dispatcher.close().catch(() => undefined);
+  }
+}
+
 async function readRemoteImage(url, maxBytes, signal) {
-  await assertSafeRemoteUrl(url);
-  const response = await fetch(url, { signal, redirect: "error", dispatcher: SAFE_REMOTE_DISPATCHER });
-  if (!response.ok) throw new Error(`image download failed with status ${response.status}`);
-  const contentLength = Number(response.headers.get("content-length") || 0);
-  if (maxBytes && contentLength > maxBytes) throw new Error(`image size exceeds maxImageBytes ${maxBytes}`);
-  const bytes = await readResponseBytes(response, maxBytes);
-  return toImageData(bytes);
+  let lastError;
+  for (let attempt = 0; attempt <= REMOTE_ATTEMPT_BACKOFF_MS.length; attempt += 1) {
+    if (attempt > 0) await delay(REMOTE_ATTEMPT_BACKOFF_MS[attempt - 1], signal);
+    try {
+      return await fetchRemoteImageOnce(url, maxBytes, signal);
+    } catch (error) {
+      // Only transport failures are retried; a 4xx/5xx, a size violation or an
+      // SSRF rejection must surface immediately rather than being masked.
+      if (!isRetryableConnectError(error)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 async function readAttachmentImage(ctx, attachment, maxBytes, signal) {

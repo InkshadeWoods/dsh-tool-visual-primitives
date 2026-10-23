@@ -1,5 +1,5 @@
-import { registerVisionBridge } from "./adapters/bridge-adapter.mjs";
-import { registerVisionTool } from "./adapters/tool-adapter.mjs";
+import { BRIDGE_PROVIDER_ID, registerVisionBridge } from "./adapters/bridge-adapter.mjs";
+import { registerVisionTool, VISION_TOOL_NAME } from "./adapters/tool-adapter.mjs";
 import { DEFAULT_ANALYSIS_CONFIG, resolveCredential, resolveRuntimeConfig } from "./vision/analysis-core.mjs";
 import { isMimo, requestVisionCompletion } from "./vision/transport.mjs";
 
@@ -290,6 +290,35 @@ export function apply(ctx, config) {
   if (cfg.visionProvider !== false && typeof ctx.llm?.registerAdapter === "function") {
     const disposer = registerVisionBridge(ctx, cfg);
     if (typeof disposer === "function") disposers.push(disposer);
+
+    // The tool is an opt-in surface: it exists for [vision] bridged models only.
+    // Every other model — native multimodal included — keeps using its own
+    // capability instead of routing through the external pipeline. Gating at
+    // pre-execute denies before the body runs and hands the model a reason it
+    // can act on. When the bridge is disabled no [vision] model can be selected,
+    // so the gate is not installed and the tool keeps its legacy behaviour.
+    disposers.push(
+      ctx.on("tools/pre-execute", async (exec, next) => {
+        if (exec.name !== VISION_TOOL_NAME) return next();
+        // agent.options is NOT the resolved route for a bridged model: it keeps
+        // the base provider (e.g. "omniroute") while the request actually routes
+        // through the bridge. The session's folded request/context is the
+        // authoritative record of the route the current step is using, so prefer
+        // it and fall back to agent.options only where that accessor is absent.
+        const resolved = exec.agent?.session?.requestContext?.()?.provider;
+        const provider = resolved ?? exec.agent?.options?.provider;
+        // Unknown provider: never let the gate itself break the tool.
+        if (!provider) return next();
+        if (provider === BRIDGE_PROVIDER_ID) return next();
+        return {
+          kind: "deny",
+          reason:
+            `${VISION_TOOL_NAME} is only available when the active model is a "[vision]" bridged model. ` +
+            `The active model uses provider "${provider}", so inspect the image or attachment with its own capability. ` +
+            `To enable the external visual pipeline, switch to any "[vision]" model.`,
+        };
+      }),
+    );
   }
   return () => {
     for (const disposer of disposers) disposer();
